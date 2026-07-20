@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>JW TV Application</title>
+  <style>
+    :root {
+      --bg-dark: #090b0e;
+      --card-bg: rgba(255, 255, 255, 0.05);
+      --sidebar-bg: rgba(13, 17, 23, 0.95);
+      --accent-red: #e50914;
+      --accent-hover: #ff1e27;
+      --text-main: #ffffff;
+      --text-muted: #8b949e;
+      --focus-outline: #ffffff;
+      --sidebar-width-collapsed: 70px;
+      --sidebar-width-expanded: 240px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+    }
+
+    /* Side Navigation (Collapsible) */
+    sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: var(--sidebar-width-collapsed);
+      background-color: var(--sidebar-bg);
+      backdrop-filter: blur(16px);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      padding: 24px 0;
+      transition: width 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+    }
+
+    sidebar:hover, sidebar:focus-within {
+      width: var(--sidebar-width-expanded);
+      box-shadow: 10px 0 30px rgba(0, 0, 0, 0.6);
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 22px;
+      margin-bottom: 32px;
+      white-space: nowrap;
+    }
+
+    .brand-logo .logo-icon {
+      font-size: 1.5rem;
+      color: var(--accent-red);
+    }
+
+    .brand-logo .logo-text {
+      font-weight: 700;
+      font-size: 1.2rem;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    sidebar:hover .logo-text, sidebar:focus-within .logo-text {
+      opacity: 1;
+    }
+
+    .nav-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 12px 22px;
+      color: var(--text-muted);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+      outline: none;
+    }
+
+    .nav-item .icon {
+      font-size: 1.2rem;
+      min-width: 24px;
+      text-align: center;
+    }
+
+    .nav-item .label {
+      font-size: 0.95rem;
+      font-weight: 500;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    sidebar:hover .label, sidebar:focus-within .label {
+      opacity: 1;
+    }
+
+    .nav-item:hover, .nav-item:focus, .nav-item.active {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .nav-item.active {
+      border-left: 4px solid var(--accent-red);
+    }
+
+    /* Main Application View Area */
+    main {
+      margin-left: var(--sidebar-width-collapsed);
+      flex: 1;
+      min-height: 100vh;
+      position: relative;
+    }
+
+    /* Top Utility Bar (Language & Quick Tools) */
+    .top-bar {
+      position: absolute;
+      top: 24px;
+      right: 48px;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .lang-switcher {
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: var(--text-main);
+      padding: 8px 18px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      backdrop-filter: blur(8px);
+      transition: all 0.2s ease;
+      outline: none;
+    }
+
+    .lang-switcher:hover, .lang-switcher:focus {
+      background: rgba(255, 255, 255, 0.25);
+      transform: scale(1.05);
+    }
+
+    /* Hero Banner Area */
+    .hero-banner {
+      position: relative;
+      height: 55vh;
+      width: 100%;
+      display: flex;
+      align-items: flex-end;
+      padding: 0 48px 48px 48px;
+      background: url('https://picsum.photos/id/1018/1600/900') center/cover no-repeat;
+    }
+
+    .hero-gradient {
+      position: absolute;
+      inset: 0;
+      background: 
+        linear-gradient(to right, var(--bg-dark) 10%, rgba(9, 11, 14, 0.6) 50%, rgba(9, 11, 14, 0) 100%),
+        linear-gradient(to top, var(--bg-dark) 0%, transparent 60%);
+    }
+
+    .hero-details {
+      position: relative;
+      z-index: 2;
+      max-width: 520px;
+    }
+
+    .hero-tag {
+      color: var(--accent-red);
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+
+    .hero-title {
+      font-size: 2.2rem;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 12px;
+    }
+
+    .hero-info {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    .btn-action {
+      background-color: var(--accent-red);
+      color: #fff;
+      border: none;
+      padding: 12px 28px;
+      border-radius: 24px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      outline: none;
+    }
+
+    .btn-action:hover, .btn-action:focus {
+      background-color: var(--accent-hover);
+      transform: scale(1.05);
+      box-shadow: 0 8px 20px rgba(229, 9, 20, 0.5);
+    }
+
+    /* Content Rows Section */
+    .rows-container {
+      padding: 0 48px 48px 48px;
+      display: flex;
+      flex-direction: column;
+      gap: 36px;
+    }
+
+    .row-title {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+
+    .row-cards {
+      display: flex;
+      gap: 16px;
+      overflow-x: auto;
+      padding: 8px 0;
+      scrollbar-width: none;
+    }
+
+    .row-cards::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* Card Styling */
+    .card {
+      flex: 0 0 220px;
+      background: var(--card-bg);
+      border-radius: 10px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      outline: none;
+    }
+
+    .card:hover, .card:focus {
+      transform: translateY(-6px) scale(1.04);
+      box-shadow: 0 10px 20px rgba(0,0,0,0.6), 0 0 0 2px var(--focus-outline);
+    }
+
+    .card-thumb {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background-color: #161b22;
+    }
+
+    .card-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .duration {
+      position: absolute;
+      bottom: 6px;
+      right: 6px;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+
+    .card-details {
+      padding: 10px 12px;
+    }
+
+    .card-title {
+      font-size: 0.88rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Collapsible Side Navigation Drawer -->
+  <sidebar>
+    <div class="brand-logo">
+      <span class="logo-icon">&#9654;</span>
+      <span class="logo-text">JW TV</span>
+    </div>
+    <ul class="nav-list">
+      <li class="nav-item active" tabindex="0">
+        <span class="icon">&#8962;</span>
+        <span class="label">Home</span>
+      </li>
+      <li class="nav-item" tabindex="0">
+        <span class="icon">&#128269;</span>
+        <span class="label">Search</span>
+      </li>
+      <li class="nav-item" tabindex="0">
+        <span class="icon">&#128214;</span>
+        <span class="label">The Bible</span>
+      </li>
+      <li class="nav-item" tabindex="0">
+        <span class="icon">&#127917;</span>
+        <span class="label">Dramas</span>
+      </li>
+      <li class="nav-item" tabindex="0">
+        <span class="icon">&#128250;</span>
+        <span class="label">Series</span>
+      </li>
+      <li class="nav-item" tabindex="0">
+        <span class="icon">&#127925;</span>
+        <span class="label">Music</span>
+      </li>
+      <li class="nav-item" tabindex="0">
+        <span class="icon">&#127908;</span>
+        <span class="label">Interviews</span>
+      </li>
+      <li class="nav-item" tabindex="0">
+        <span class="icon">&#128065;</span>
+        <span class="label">Audio Descriptions</span>
+      </li>
+      <li class="nav-item" tabindex="0">
+        <span class="icon">&#128066;</span>
+        <span class="label">Programs for Kids</span>
+      </li>
+    </ul>
+  </sidebar>
+
+  <!-- Main View Area -->
+  <main>
+    <!-- Language Switcher in Top Right -->
+    <div class="top-bar">
+      <button class="lang-switcher" tabindex="0">
+        <span>&#127760;</span> English
+      </button>
+    </div>
+
+    <!-- Featured Hero Banner -->
+    <div class="hero-banner">
+      <div class="hero-gradient"></div>
+      <div class="hero-details">
+        <div class="hero-tag">Featured Video</div>
+        <h1 class="hero-title">For a Happy Marriage: Read God's Word</h1>
+        <div class="hero-info">05:54 &bull; HD &bull; Family</div>
+        <button class="btn-action" tabindex="0">&#9654; Play Now</button>
+      </div>
+    </div>
+
+    <!-- Content Sections / Rows -->
+    <div class="rows-container">
+      
+      <!-- Row 1 -->
+      <section>
+        <h2 class="row-title">Family Challenges</h2>
+        <div class="row-cards" id="row-family"></div>
+      </section>
+
+      <!-- Row 2 -->
+      <section>
+        <h2 class="row-title">Music & Worship</h2>
+        <div class="row-cards" id="row-music"></div>
+      </section>
+
+    </div>
+  </main>
+
+  <script>
+    // Sample Data Sets
+    const familyData = [
+      { title: "For a Happy Marriage", duration: "05:54", img: "https://picsum.photos/id/1025/400/225" },
+      { title: "Overcoming Anxiety", duration: "03:56", img: "https://picsum.photos/id/1012/400/225" },
+      { title: "Building Strong Friendships", duration: "05:02", img: "https://picsum.photos/id/1027/400/225" },
+      { title: "Walking in Integrity", duration: "04:05", img: "https://picsum.photos/id/1062/400/225" },
+      { title: "Finding True Peace", duration: "06:12", img: "https://picsum.photos/id/1069/400/225" }
+    ];
+
+    const musicData = [
+      { title: "Sing Out with Joy", duration: "03:15", img: "https://picsum.photos/id/1043/400/225" },
+      { title: "Comfort in Times of Trouble", duration: "04:40", img: "https://picsum.photos/id/1050/400/225" },
+      { title: "Praise Him Continually", duration: "02:50", img: "https://picsum.photos/id/1056/400/225" },
+      { title: "Light in the Darkness", duration: "05:10", img: "https://picsum.photos/id/1060/400/225" }
+    ];
+
+    function populateRow(containerId, items) {
+      const container = document.getElementById(containerId);
+      items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.tabIndex = 0; // Enables Smart TV / D-pad keyboard focus
+        card.innerHTML = `
+          <div class="card-thumb">
+            <img src="${item.img}" alt="${item.title}">
+            <span class="duration">${item.duration}</span>
+          </div>
+          <div class="card-details">
+            <div class="card-title">${item.title}</div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    populateRow('row-family', familyData);
+    populateRow('row-music', musicData);
+  </script>
+</body>
+</html>
