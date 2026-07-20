@@ -40,6 +40,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.jw.tv.api.MediaItem
 import androidx.compose.foundation.focusable
 import androidx.tv.material3.ButtonDefaults
@@ -66,8 +67,16 @@ fun VideoPlayerScreen(
         context.getSharedPreferences("jw_tv_prefs", Context.MODE_PRIVATE)
     }
 
-    val savedProgress = remember(video.title) {
-        sharedPrefs.getLong("progress_${video.title}", 0L)
+    val savedProgress = remember(video.contentId) {
+        val newKey = "progress_${video.contentId}"
+        val oldKey = "progress_${video.title}"
+        if (sharedPrefs.contains(newKey)) {
+            sharedPrefs.getLong(newKey, 0L)
+        } else if (sharedPrefs.contains(oldKey)) {
+            val oldPos = sharedPrefs.getLong(oldKey, 0L)
+            sharedPrefs.edit().putLong(newKey, oldPos).remove(oldKey).apply()
+            oldPos
+        } else 0L
     }
 
     var currentResolution by remember { mutableStateOf(selectedResolution) }
@@ -156,10 +165,32 @@ fun VideoPlayerScreen(
             val totalDuration = exoPlayer.duration
             if (totalDuration > 0L) {
                 val progressPercent = currentPos.toFloat() / totalDuration.toFloat()
+                val appContext = context.applicationContext
+                val dao = org.jw.tv.data.AppDatabase.getDatabase(appContext).mediaDao()
+                val jsonStr = try {
+                    org.jw.tv.api.MediatorClient.json.encodeToString(org.jw.tv.api.MediaItem.serializer(), video)
+                } catch (e: Exception) { "" }
+
                 if (currentPos > 5000L && progressPercent < 0.95f) {
-                    sharedPrefs.edit().putLong("progress_${video.title}", currentPos).apply()
+                    sharedPrefs.edit().putLong("progress_${video.contentId}", currentPos).apply()
+                    val entity = org.jw.tv.data.WatchProgressEntity(
+                        contentId = video.contentId,
+                        title = video.title,
+                        thumbnailUrl = video.getThumbnailUrl(small = true),
+                        durationSeconds = video.duration,
+                        positionMs = currentPos,
+                        durationMs = totalDuration,
+                        lastWatchedTimestamp = System.currentTimeMillis(),
+                        rawMediaItemJson = jsonStr
+                    )
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                        dao.saveWatchProgress(entity)
+                    }
                 } else {
-                    sharedPrefs.edit().remove("progress_${video.title}").apply()
+                    sharedPrefs.edit().remove("progress_${video.contentId}").apply()
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                        dao.deleteWatchProgress(video.contentId)
+                    }
                 }
             }
             exoPlayer.removeListener(listener)

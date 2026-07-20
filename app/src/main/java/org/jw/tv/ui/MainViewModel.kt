@@ -74,6 +74,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     var uiState by mutableStateOf<UiState>(UiState.Loading)
         private set
+    // ── Room DB: Persistence & Favorites ────────────────────────────────────
+
+    private val mediaDao = org.jw.tv.data.AppDatabase.getDatabase(application).mediaDao()
+
+    var continueWatchingList by mutableStateOf<List<org.jw.tv.data.WatchProgressEntity>>(emptyList())
+        private set
+
+    var favoritesList by mutableStateOf<List<org.jw.tv.data.FavoriteEntity>>(emptyList())
+        private set
+
+    var favoriteContentIds by mutableStateOf<Set<String>>(emptySet())
+        private set
+    fun toggleFavorite(video: MediaItem) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val contentId = video.contentId
+            if (mediaDao.isFavorite(contentId)) {
+                mediaDao.removeFavorite(contentId)
+            } else {
+                val jsonStr = try { MediatorClient.json.encodeToString(MediaItem.serializer(), video) } catch (e: Exception) { "" }
+                val entity = org.jw.tv.data.FavoriteEntity(
+                    contentId = contentId,
+                    title = video.title,
+                    thumbnailUrl = video.getThumbnailUrl(small = true),
+                    durationSeconds = video.duration,
+                    addedTimestamp = System.currentTimeMillis(),
+                    rawMediaItemJson = jsonStr
+                )
+                mediaDao.addFavorite(entity)
+            }
+        }
+    }
+
+    fun selectFavoritesCategory() {
+        currentCategory = CategoryData(key = "FAVORITES", type = "custom", name = "Favorites")
+        viewModelScope.launch {
+            val favVideos = favoritesList.mapNotNull { fav ->
+                try { MediatorClient.json.decodeFromString<MediaItem>(fav.rawMediaItemJson) } catch (e: Exception) { null }
+            }
+            subcategoriesWithMedia = if (favVideos.isNotEmpty()) {
+                listOf(SubcategoryWithMedia(name = "Your Favorites", key = "FAVORITES_ROW", videos = favVideos))
+            } else emptyList()
+            uiState = UiState.Success
+        }
+    }
 
     // ── Update ───────────────────────────────────────────────────────────────
 
@@ -115,6 +159,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         loadRootCategories()
         loadLanguages()
+
+        // Observe Room Watch Progress
+        viewModelScope.launch {
+            mediaDao.getWatchProgressFlow().collect { list ->
+                continueWatchingList = list
+            }
+        }
+        // Observe Room Favorites
+        viewModelScope.launch {
+            mediaDao.getFavoritesFlow().collect { list ->
+                favoritesList = list
+                favoriteContentIds = list.map { it.contentId }.toSet()
+            }
+        }
     }
 
     // ── Category loading ─────────────────────────────────────────────────────

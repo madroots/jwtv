@@ -46,6 +46,16 @@ data class MediaItem(
         }
         return images?.values?.firstNotNullOfOrNull { it.getAnyUrl() }
     }
+
+    val contentId: String
+        get() {
+            val firstUrl = files?.firstOrNull { !it.progressiveDownloadURL.isNullOrBlank() }?.progressiveDownloadURL
+            if (!firstUrl.isNullOrBlank()) {
+                val cleanUrl = firstUrl.substringBefore('?')
+                return cleanUrl.hashCode().toString()
+            }
+            return title.hashCode().toString()
+        }
 }
 
 @Immutable

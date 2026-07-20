@@ -5,21 +5,22 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
-import okhttp3.OkHttpClient
+import org.jw.tv.api.MediatorClient
 
 /**
- * PERF-2: Custom ImageLoader with bounded memory cache (64 MB) and disk cache
- * (256 MB). Coil picks this up automatically via [ImageLoaderFactory].
- * OkHttpClient is shared with [org.jw.tv.api.MediatorClient] — same connection
- * pool, same HTTP cache — so image requests don't open extra sockets.
+ * ARCH-3: Centralized network & cache initialization.
+ * [MediatorClient.init] is called here in [onCreate] so OkHttp, 100 MB HTTP cache,
+ * and [org.jw.tv.api.CacheManager] are initialized at the application level before
+ * any Activity or background task starts.
  */
 class JwTvApp : Application(), ImageLoaderFactory {
 
+    override fun onCreate() {
+        super.onCreate()
+        MediatorClient.init(this)
+    }
+
     override fun newImageLoader(): ImageLoader {
-        // MediatorClient.init is called in MainActivity; by the time any
-        // AsyncImage fires, the client is already configured with its HTTP cache.
-        // We build a fresh client here only for Coil (separate OkHttp cache dir)
-        // so image disk caching is independent of JSON response caching.
         return ImageLoader.Builder(this)
             .memoryCache {
                 MemoryCache.Builder(this)

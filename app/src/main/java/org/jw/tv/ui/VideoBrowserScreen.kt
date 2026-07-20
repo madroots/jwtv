@@ -9,25 +9,29 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Accessibility
+import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.Business
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ChildCare
+import androidx.compose.material.icons.automirrored.filled.DirectionsRun
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PeopleAlt
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tv
-import androidx.compose.material.icons.filled.ChildCare
-import androidx.compose.material.icons.filled.Book
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Business
-import androidx.compose.material.icons.automirrored.filled.DirectionsRun
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Accessibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.*
@@ -63,11 +67,12 @@ import coil.request.ImageRequest
 import kotlinx.coroutines.launch
 import org.jw.tv.BuildConfig
 import org.jw.tv.api.MediaItem
+import org.jw.tv.api.MediatorClient
+import org.jw.tv.data.WatchProgressEntity
 
 private val SIDEBAR_FULL_DP = 240.dp
 private val SIDEBAR_ICON_DP = 70.dp
-// GPU translation to hide sidebar: show only 70dp of the 240dp panel
-private const val SIDEBAR_HIDDEN_OFFSET_DP = -(240 - 70)   // = -170
+private const val SIDEBAR_HIDDEN_OFFSET_DP = -(240 - 70)
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -78,7 +83,6 @@ fun VideoBrowserScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
-    // ── Sidebar state ────────────────────────────────────────────────────────
     var sidebarExpanded by remember { mutableStateOf(false) }
     val sidebarOffset by animateFloatAsState(
         targetValue = if (sidebarExpanded) 0f else SIDEBAR_HIDDEN_OFFSET_DP.toFloat(),
@@ -86,12 +90,8 @@ fun VideoBrowserScreen(
         label = "sidebarOffset"
     )
 
-    // FocusRequester for the first sidebar item (Home). UX-6: main content
-    // intercepts D-pad Left and calls requestFocus() on this to open the drawer.
     val sidebarFirstFocus = remember { FocusRequester() }
 
-    // ── Scroll state (BUG-1) ─────────────────────────────────────────────────
-    // PERF-1: TvLazyListState instead of LazyListState
     val listState = rememberTvLazyListState()
     val currentCategoryKey = viewModel.currentCategory?.key
     LaunchedEffect(currentCategoryKey, viewModel.uiState) {
@@ -118,7 +118,6 @@ fun VideoBrowserScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(start = SIDEBAR_ICON_DP)
-                // UX-6: D-pad Left from anywhere in the content opens the sidebar.
                 .onKeyEvent { event ->
                     if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
                         try {
@@ -128,7 +127,6 @@ fun VideoBrowserScreen(
                     } else false
                 }
         ) {
-            // PERF-1: TvLazyColumn — TV-aware scroll physics and focus handling
             TvLazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
@@ -160,34 +158,70 @@ fun VideoBrowserScreen(
                     }
 
                     is UiState.Success -> {
-                        if (viewModel.subcategoriesWithMedia.isEmpty()) {
+                        // Featured Hero Banner at top of page
+                        val featured = viewModel.featuredVideo
+                            ?: viewModel.subcategoriesWithMedia.firstOrNull()?.videos?.firstOrNull()
+                        if (featured != null) {
+                            item {
+                                HeroBanner(
+                                    video = featured,
+                                    onPlay = { selectedVideoForDetails = featured }
+                                )
+                            }
+                        }
+
+                        // UX-4: "Continue Watching" Row (Home screen only)
+                        val isHome = viewModel.currentCategory == null || viewModel.currentCategory?.key == "VideoOnDemand"
+                        if (isHome && viewModel.continueWatchingList.isNotEmpty()) {
+                            item {
+                                Column(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 24.dp, vertical = 12.dp)
+                                ) {
+                                    Text(
+                                        text = "Continue Watching",
+                                        color = Color.White,
+                                        fontSize = 19.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(bottom = 10.dp)
+                                    )
+                                    TvLazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                        pivotOffsets = androidx.tv.foundation.PivotOffsets(parentFraction = 0f)
+                                    ) {
+                                        items(viewModel.continueWatchingList) { progress ->
+                                            ContinueWatchingCard(
+                                                progress = progress,
+                                                onClick = {
+                                                    val mediaItem = try {
+                                                        MediatorClient.json.decodeFromString<MediaItem>(progress.rawMediaItemJson)
+                                                    } catch (e: Exception) { null }
+                                                    if (mediaItem != null) {
+                                                        viewModel.activeVideo = mediaItem
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (viewModel.subcategoriesWithMedia.isEmpty() && (!isHome || viewModel.continueWatchingList.isEmpty())) {
                             item {
                                 Box(
                                     Modifier.fillMaxWidth().height(300.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        "No videos found in this category.",
+                                        "No videos found.",
                                         color = Color.Gray,
                                         fontSize = 16.sp
                                     )
                                 }
                             }
                         } else {
-                            // UX-5: use VM's editorially-curated featuredVideo; fall back
-                            // to first video in first subcategory if API doesn't provide one.
-                            val featured = viewModel.featuredVideo
-                                ?: viewModel.subcategoriesWithMedia.firstOrNull()?.videos?.firstOrNull()
-                            if (featured != null) {
-                                item {
-                                    HeroBanner(
-                                        video = featured,
-                                        onPlay = { selectedVideoForDetails = featured }
-                                    )
-                                }
-                            }
-
-                            // PERF-1: items() from TvLazyColumn DSL
                             items(viewModel.subcategoriesWithMedia) { subcat ->
                                 Column(
                                     Modifier
@@ -201,12 +235,9 @@ fun VideoBrowserScreen(
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(bottom = 10.dp)
                                     )
-                                    // PERF-1: TvLazyRow
                                     TvLazyRow(
                                         horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                        pivotOffsets = androidx.tv.foundation.PivotOffsets(
-                                            parentFraction = 0f
-                                        )
+                                        pivotOffsets = androidx.tv.foundation.PivotOffsets(parentFraction = 0f)
                                     ) {
                                         items(subcat.videos) { video ->
                                             VideoCard(
@@ -223,7 +254,7 @@ fun VideoBrowserScreen(
             }
         }
 
-        // ── Sidebar (GPU translate — zero layout impact on siblings) ─────────
+        // ── Sidebar (GPU translate) ──────────────────────────────────────────
         Column(
             modifier = Modifier
                 .width(SIDEBAR_FULL_DP)
@@ -234,7 +265,7 @@ fun VideoBrowserScreen(
                 .onFocusChanged { sidebarExpanded = it.hasFocus }
                 .padding(vertical = 24.dp)
         ) {
-            // Brand logo — PERF-4: ImageVector icon, no emoji shaping
+            // Brand logo
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -260,7 +291,7 @@ fun VideoBrowserScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            // Nav items — PERF-1: TvLazyColumn inside sidebar too
+            // Nav items
             TvLazyColumn(
                 Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -273,9 +304,23 @@ fun VideoBrowserScreen(
                         label = "Home",
                         selected = isHome,
                         expanded = sidebarExpanded,
-                        focusRequester = sidebarFirstFocus,     // UX-6 hook
+                        focusRequester = sidebarFirstFocus,
                         onClick = {
                             viewModel.loadRootCategories()
+                            coroutineScope.launch { listState.animateScrollToItem(0) }
+                        }
+                    )
+                }
+                // ARCH-6: Favorites Sidebar Nav Item
+                item {
+                    val isFavSelected = viewModel.currentCategory?.key == "FAVORITES"
+                    SidebarItem(
+                        icon = Icons.Filled.Favorite,
+                        label = "Favorites (${viewModel.favoritesList.size})",
+                        selected = isFavSelected,
+                        expanded = sidebarExpanded,
+                        onClick = {
+                            viewModel.selectFavoritesCategory()
                             coroutineScope.launch { listState.animateScrollToItem(0) }
                         }
                     )
@@ -315,7 +360,6 @@ fun VideoBrowserScreen(
                     expanded = sidebarExpanded,
                     onClick = { viewModel.checkForUpdates(versionCode, manual = true) }
                 )
-                // UX-8: BuildConfig.VERSION_NAME instead of hardcoded string
                 if (sidebarExpanded) {
                     Text(
                         text = "v${BuildConfig.VERSION_NAME} (${versionCode})",
@@ -330,9 +374,11 @@ fun VideoBrowserScreen(
 
     // ── Overlays ─────────────────────────────────────────────────────────────
 
+    // UX-2: TV-Native Video Details Overlay
     selectedVideoForDetails?.let { video ->
         VideoDetailsDialog(
             video = video,
+            viewModel = viewModel,
             onDismiss = { selectedVideoForDetails = null },
             onPlay = { resolution ->
                 viewModel.selectedResolution = resolution
@@ -346,7 +392,6 @@ fun VideoBrowserScreen(
         LanguageSelectionDialog(viewModel = viewModel, onDismiss = { showLanguageDialog = false })
     }
 
-    // Update dialogs — BUG-3: fully driven by VM state
     if (viewModel.updateAvailable && !viewModel.updateDialogDismissed) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissUpdateDialog() },
@@ -421,6 +466,88 @@ fun VideoBrowserScreen(
     }
 }
 
+// ── Continue Watching Card (UX-4) ────────────────────────────────────────────
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+fun ContinueWatchingCard(
+    progress: WatchProgressEntity,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    var isFocused by remember { mutableStateOf(false) }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isFocused) 1.06f else 1.0f,
+        animationSpec = tween(durationMillis = 120),
+        label = "cardScale"
+    )
+
+    val imageRequest = remember(progress.thumbnailUrl) {
+        ImageRequest.Builder(context)
+            .data(progress.thumbnailUrl)
+            .size(320, 180)
+            .build()
+    }
+
+    val progressFraction = if (progress.durationMs > 0) {
+        (progress.positionMs.toFloat() / progress.durationMs.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+
+    Surface(
+        onClick = onClick,
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color(0xFF161B22),
+            focusedContainerColor = Color(0xFF161B22)
+        ),
+        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(10.dp)),
+        border = ClickableSurfaceDefaults.border(
+            focusedBorder = Border(
+                border = BorderStroke(2.dp, Color.White),
+                shape = RoundedCornerShape(10.dp)
+            )
+        ),
+        modifier = modifier
+            .width(220.dp)
+            .aspectRatio(16f / 9f)
+            .onFocusChanged { isFocused = it.isFocused }
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                SubcomposeAsyncImage(
+                    model = imageRequest,
+                    contentDescription = progress.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    loading = { ShimmerBox(Modifier.fillMaxSize()) }
+                )
+                // Bottom Progress Bar
+                LinearProgressIndicator(
+                    progress = { progressFraction },
+                    color = Color(0xFFE50914),
+                    trackColor = Color(0x66000000),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .align(Alignment.BottomCenter)
+                )
+            }
+            Box(Modifier.fillMaxWidth().padding(8.dp)) {
+                Text(
+                    progress.title,
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
 // ── Sidebar item ─────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -447,7 +574,6 @@ private fun SidebarItem(
             Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // PERF-4: vector icon — rendered on GPU, no Unicode shaping overhead
             androidx.compose.material3.Icon(
                 imageVector = icon,
                 contentDescription = label,
@@ -482,7 +608,7 @@ fun HeroBanner(
         SubcomposeAsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(video.getThumbnailUrl())
-                .size(1280, 720)       // PERF-2: explicit decode size for hero
+                .size(1280, 720)
                 .build(),
             contentDescription = video.title,
             modifier = Modifier.fillMaxSize(),
@@ -589,7 +715,6 @@ fun VideoCard(
             .build()
     }
 
-    // BUG-6: TV Surface — D-pad center/enter fires through TV focus system
     Surface(
         onClick = onClick,
         colors = ClickableSurfaceDefaults.colors(
@@ -611,7 +736,6 @@ fun VideoCard(
     ) {
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                // UX-3: SubcomposeAsyncImage with shimmer placeholder
                 SubcomposeAsyncImage(
                     model = imageRequest,
                     contentDescription = video.title,
@@ -686,12 +810,13 @@ fun ShimmerBox(modifier: Modifier = Modifier) {
     }
 }
 
-// ── Video details dialog ─────────────────────────────────────────────────────
+// ── TV-Native Video Details Overlay (UX-2 & ARCH-6) ──────────────────────────
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun VideoDetailsDialog(
     video: MediaItem,
+    viewModel: MainViewModel,
     onDismiss: () -> Unit,
     onPlay: (selectedResolution: String?) -> Unit
 ) {
@@ -699,69 +824,136 @@ fun VideoDetailsDialog(
     val resolutions = remember(video) {
         video.files?.mapNotNull { it.label }?.distinct() ?: emptyList()
     }
+    val playButtonFocusRequester = remember { FocusRequester() }
+    val isFavorite = video.contentId in viewModel.favoriteContentIds
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(video.title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-        },
-        text = {
-            Column(Modifier.fillMaxWidth()) {
-                Box(Modifier.fillMaxWidth().height(180.dp)) {
+    LaunchedEffect(Unit) {
+        try { playButtonFocusRequester.requestFocus() } catch (e: Exception) {}
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.85f))
+            .zIndex(50f)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDismiss() },
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            onClick = {},
+            colors = ClickableSurfaceDefaults.colors(
+                containerColor = Color(0xFF161B22),
+                focusedContainerColor = Color(0xFF161B22)
+            ),
+            shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(16.dp)),
+            modifier = Modifier
+                .width(820.dp)
+                .height(440.dp)
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {} // absorb click
+        ) {
+            Row(modifier = Modifier.fillMaxSize()) {
+                // Left 45% Poster preview
+                Box(modifier = Modifier.weight(0.45f).fillMaxHeight()) {
                     SubcomposeAsyncImage(
-                        model = video.getThumbnailUrl(),
-                        contentDescription = null,
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(video.getThumbnailUrl())
+                            .size(640, 360)
+                            .build(),
+                        contentDescription = video.title,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
                         loading = { ShimmerBox(Modifier.fillMaxSize()) }
                     )
-                }
-                Spacer(Modifier.height(12.dp))
-                val dur = formatDuration(video.duration)
-                if (dur.isNotEmpty()) {
-                    Text("Duration: $dur", fontSize = 14.sp, color = Color.LightGray)
-                }
-                Spacer(Modifier.height(16.dp))
-                Text("Quality:", fontSize = 14.sp, color = Color.LightGray)
-                Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = { chosenResolution = null },
-                        colors = ButtonDefaults.colors(
-                            containerColor = if (chosenResolution == null) Color(0xFF34495E)
-                            else Color.Transparent
-                        )
-                    ) { Text("Auto") }
-                    resolutions.forEach { res ->
-                        OutlinedButton(
-                            onClick = { chosenResolution = res },
-                            colors = ButtonDefaults.colors(
-                                containerColor = if (chosenResolution == res) Color(0xFF34495E)
-                                else Color.Transparent
+                    Box(
+                        Modifier.fillMaxSize().background(
+                            Brush.horizontalGradient(
+                                colors = listOf(Color.Transparent, Color(0xFF161B22)),
+                                startX = 200f, endX = 500f
                             )
-                        ) { Text(res) }
+                        )
+                    )
+                }
+
+                // Right 55% Details & Controls
+                Column(
+                    modifier = Modifier
+                        .weight(0.55f)
+                        .fillMaxHeight()
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = video.title,
+                            color = Color.White,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        val dur = formatDuration(video.duration)
+                        if (dur.isNotEmpty()) {
+                            Text(
+                                text = "$dur • HD • Video",
+                                color = Color(0xFF8B949E),
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Quality / Calidad:", color = Color.LightGray, fontSize = 13.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = { chosenResolution = null },
+                                colors = ButtonDefaults.colors(
+                                    containerColor = if (chosenResolution == null) Color(0xFF34495E) else Color.Transparent
+                                )
+                            ) { Text("Auto") }
+                            resolutions.forEach { res ->
+                                OutlinedButton(
+                                    onClick = { chosenResolution = res },
+                                    colors = ButtonDefaults.colors(
+                                        containerColor = if (chosenResolution == res) Color(0xFF34495E) else Color.Transparent
+                                    )
+                                ) { Text(res) }
+                            }
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Button(
+                                onClick = { onPlay(chosenResolution) },
+                                colors = ButtonDefaults.colors(
+                                    containerColor = Color(0xFFE50914),
+                                    focusedContainerColor = Color(0xFFFF1E27)
+                                ),
+                                shape = ButtonDefaults.shape(shape = RoundedCornerShape(24.dp)),
+                                modifier = Modifier
+                                    .height(44.dp)
+                                    .focusRequester(playButtonFocusRequester)
+                            ) {
+                                Text("▶ Play Video", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+
+                            OutlinedButton(
+                                onClick = { viewModel.toggleFavorite(video) },
+                                shape = ButtonDefaults.shape(shape = RoundedCornerShape(24.dp)),
+                                modifier = Modifier.height(44.dp)
+                            ) {
+                                Text(
+                                    if (isFavorite) "❤️ Favorited" else "🤍 Add Favorite",
+                                    color = Color.White
+                                )
+                            }
+                        }
                     }
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onPlay(chosenResolution) },
-                colors = ButtonDefaults.colors(
-                    containerColor = Color(0xFFE50914),
-                    focusedContainerColor = Color(0xFFFF1E27)
-                )
-            ) {
-                Text(if (chosenResolution == null) "Play (Auto)" else "Play $chosenResolution")
-            }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = onDismiss) { Text("Cancel") }
-        },
-        containerColor = Color(0xFF1E1E1E),
-        titleContentColor = Color.White,
-        textContentColor = Color.LightGray
-    )
+        }
+    }
 }
 
 // ── Language dialog ──────────────────────────────────────────────────────────
@@ -886,7 +1078,6 @@ fun formatDuration(durationSeconds: Double?): String {
     else String.format("%02d:%02d", m, s)
 }
 
-// PERF-4: returns ImageVector instead of an emoji String
 fun getCategoryIcon(key: String): ImageVector = when (key) {
     "VODStudio"            -> Icons.Filled.Tv
     "VODChildren"          -> Icons.Filled.ChildCare

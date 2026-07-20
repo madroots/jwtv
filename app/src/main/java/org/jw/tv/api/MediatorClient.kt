@@ -59,9 +59,10 @@ object MediatorClient {
 
     suspend fun getCachedCategory(
         categoryKey: String,
-        languageCode: String = "E"
+        languageCode: String = "E",
+        maxAgeMillis: Long? = CacheManager.MAX_SWR_AGE
     ): CategoryResponse? {
-        val cached = CacheManager.getJson("cat_${languageCode}_${categoryKey}") ?: return null
+        val cached = CacheManager.getJson("cat_${languageCode}_${categoryKey}", maxAgeMillis) ?: return null
         return try {
             json.decodeFromString<CategoryResponse>(cached)
         } catch (e: Exception) {
@@ -87,8 +88,11 @@ object MediatorClient {
             }
         }
 
-    suspend fun getCachedLanguages(languageCode: String = "E"): LanguageResponse? {
-        val cached = CacheManager.getJson("langs_${languageCode}") ?: return null
+    suspend fun getCachedLanguages(
+        languageCode: String = "E",
+        maxAgeMillis: Long? = CacheManager.TTL_LANGUAGES
+    ): LanguageResponse? {
+        val cached = CacheManager.getJson("langs_${languageCode}", maxAgeMillis) ?: return null
         return try {
             json.decodeFromString<LanguageResponse>(cached)
         } catch (e: Exception) {
