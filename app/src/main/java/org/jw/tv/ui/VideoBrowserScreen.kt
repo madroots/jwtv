@@ -44,17 +44,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -68,8 +64,10 @@ import androidx.tv.foundation.lazy.list.items
 import androidx.tv.material3.*
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.ExperimentalComposeUiApi
 import org.jw.tv.BuildConfig
 import org.jw.tv.api.MediaItem
 import org.jw.tv.api.MediatorClient
@@ -78,7 +76,7 @@ import org.jw.tv.data.WatchProgressEntity
 private val SIDEBAR_FULL_DP = 240.dp
 private val SIDEBAR_ICON_DP = 70.dp
 
-@OptIn(ExperimentalTvMaterial3Api::class)
+@OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun VideoBrowserScreen(
     viewModel: MainViewModel,
@@ -98,7 +96,6 @@ fun VideoBrowserScreen(
     val sidebarFirstFocus = remember { FocusRequester() }
     val heroPlayFocusRequester = remember { FocusRequester() }
 
-    // Standard LazyColumn state — no intrusive TV pivot-scrolling engine!
     val listState = rememberLazyListState()
     val currentCategoryKey = viewModel.currentCategory?.key
 
@@ -126,49 +123,48 @@ fun VideoBrowserScreen(
         } catch (e: Exception) { 1 }
     }
 
+    // Bug 4 Fix: Track scroll job to cancel competing scroll animations on rapid D-pad input
+    var scrollJob by remember { mutableStateOf<Job?>(null) }
+
     // Smart row focus handler:
-    // - Row 0 (Hero) & Row 1 (1st video row): pin list at (0, 0) — ZERO scroll!
-    // - Row >= 2 (2nd row+): animate scroll so focused row is centered on screen
+    // - Row 0 (Hero) & Row 1 (1st video row): instant snap at (0, 0) — ZERO scroll!
+    // - Row >= 2 (2nd row+): smooth scroll so focused row is centered on screen
     fun handleRowFocus(rowIndex: Int) {
-        coroutineScope.launch {
-            if (rowIndex <= 1) {
-                listState.animateScrollToItem(0, 0)
-            } else {
-                listState.animateScrollToItem(rowIndex, -100)
-            }
+        scrollJob?.cancel()
+        scrollJob = coroutineScope.launch {
+            try {
+                if (rowIndex <= 1) {
+                    listState.scrollToItem(0, 0) // instant 0ms snap to top
+                } else {
+                    listState.animateScrollToItem(rowIndex, -100)
+                }
+            } catch (e: Exception) {}
         }
     }
 
     Box(modifier = modifier.fillMaxSize().background(Color(0xFF090B0E))) {
 
         // ── Main content (fixed 70dp inset) ──────────────────────────────────
+        // Bug 1 Fix: Removed aggressive Box.onKeyEvent that intercepted D-pad Left.
+        // D-pad Left now navigates card-by-card in rows, and moves to sidebar on card 1!
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(start = SIDEBAR_ICON_DP)
-                .onKeyEvent { event ->
-                    if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
-                        try {
-                            sidebarFirstFocus.requestFocus()
-                            true
-                        } catch (e: Exception) { false }
-                    } else false
-                }
         ) {
-            // Standard LazyColumn: standard viewport scrolling without TV pivot override
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize()
             ) {
                 when (val state = viewModel.uiState) {
-                    is UiState.Loading -> item {
+                    is UiState.Loading -> item(key = "loading") {
                         Box(
                             Modifier.fillMaxWidth().height(300.dp),
                             contentAlignment = Alignment.Center
                         ) { CircularProgressIndicator(color = Color.White) }
                     }
 
-                    is UiState.Error -> item {
+                    is UiState.Error -> item(key = "error") {
                         Box(
                             Modifier.fillMaxWidth().height(300.dp),
                             contentAlignment = Alignment.Center
@@ -193,7 +189,7 @@ fun VideoBrowserScreen(
                             ?: viewModel.subcategoriesWithMedia.firstOrNull()?.videos?.firstOrNull()
                         if (featured != null) {
                             val heroIndex = tvColumnItemCounter++
-                            item {
+                            item(key = "hero_banner") {
                                 HeroBanner(
                                     video = featured,
                                     playButtonFocusRequester = heroPlayFocusRequester,
@@ -207,12 +203,12 @@ fun VideoBrowserScreen(
                         val isHome = viewModel.currentCategory == null || viewModel.currentCategory?.key == "VideoOnDemand"
                         if (isHome && viewModel.continueWatchingList.isNotEmpty()) {
                             val continueIndex = tvColumnItemCounter++
-                            item {
+                            item(key = "continue_watching_row") {
                                 Column(
                                     Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 24.dp, vertical = 12.dp)
-                                        // Guaranteed D-pad UP from Continue Watching row to Hero Play button
+                                        // Bug 2 Fix: D-pad UP from 1st row goes straight to Hero Play button!
                                         .focusProperties { up = heroPlayFocusRequester }
                                         .onFocusChanged { if (it.hasFocus) handleRowFocus(continueIndex) }
                                 ) {
@@ -223,11 +219,16 @@ fun VideoBrowserScreen(
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(bottom = 10.dp)
                                     )
+                                    // Bug 3 Fix: focusRestorer() + stable keys prevent column jumping
                                     TvLazyRow(
                                         horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                        pivotOffsets = androidx.tv.foundation.PivotOffsets(parentFraction = 0f)
+                                        pivotOffsets = androidx.tv.foundation.PivotOffsets(parentFraction = 0f),
+                                        modifier = Modifier.focusRestorer()
                                     ) {
-                                        items(viewModel.continueWatchingList) { progress ->
+                                        items(
+                                            items = viewModel.continueWatchingList,
+                                            key = { it.contentId }
+                                        ) { progress ->
                                             ContinueWatchingCard(
                                                 progress = progress,
                                                 onClick = {
@@ -246,7 +247,7 @@ fun VideoBrowserScreen(
                         }
 
                         if (viewModel.subcategoriesWithMedia.isEmpty() && (!isHome || viewModel.continueWatchingList.isEmpty())) {
-                            item {
+                            item(key = "empty_state") {
                                 Box(
                                     Modifier.fillMaxWidth().height(300.dp),
                                     contentAlignment = Alignment.Center
@@ -259,9 +260,12 @@ fun VideoBrowserScreen(
                                 }
                             }
                         } else {
-                            // Subcategory Rows
+                            // Subcategory Rows with stable item keys (Bug 3 Fix)
                             val baseSubcatIndex = tvColumnItemCounter
-                            itemsIndexed(viewModel.subcategoriesWithMedia) { idx, subcat ->
+                            itemsIndexed(
+                                items = viewModel.subcategoriesWithMedia,
+                                key = { _, subcat -> subcat.key }
+                            ) { idx, subcat ->
                                 val rowItemIndex = baseSubcatIndex + idx
                                 val isFirstVideoRow = rowItemIndex == 1
 
@@ -269,7 +273,6 @@ fun VideoBrowserScreen(
                                     Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 24.dp, vertical = 12.dp)
-                                        // If this is Row 1 (first row below hero), D-pad UP goes straight to Hero Play button!
                                         .then(
                                             if (isFirstVideoRow) {
                                                 Modifier.focusProperties { up = heroPlayFocusRequester }
@@ -284,11 +287,16 @@ fun VideoBrowserScreen(
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(bottom = 10.dp)
                                     )
+                                    // Bug 3 Fix: focusRestorer() + stable contentId keys
                                     TvLazyRow(
                                         horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                        pivotOffsets = androidx.tv.foundation.PivotOffsets(parentFraction = 0f)
+                                        pivotOffsets = androidx.tv.foundation.PivotOffsets(parentFraction = 0f),
+                                        modifier = Modifier.focusRestorer()
                                     ) {
-                                        items(subcat.videos) { video ->
+                                        items(
+                                            items = subcat.videos,
+                                            key = { it.contentId }
+                                        ) { video ->
                                             VideoCard(
                                                 video = video,
                                                 onClick = { selectedVideoForDetails = video }
@@ -345,7 +353,7 @@ fun VideoBrowserScreen(
                 Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                item {
+                item(key = "nav_home") {
                     val isHome = viewModel.currentCategory == null ||
                             viewModel.currentCategory?.key == "VideoOnDemand"
                     SidebarItem(
@@ -363,7 +371,7 @@ fun VideoBrowserScreen(
                         }
                     )
                 }
-                item {
+                item(key = "nav_favorites") {
                     val isFavSelected = viewModel.currentCategory?.key == "FAVORITES"
                     SidebarItem(
                         icon = Icons.Filled.Favorite,
@@ -376,7 +384,10 @@ fun VideoBrowserScreen(
                         }
                     )
                 }
-                items(viewModel.categories) { category ->
+                items(
+                    items = viewModel.categories,
+                    key = { it.key }
+                ) { category ->
                     SidebarItem(
                         icon = getCategoryIcon(category.key),
                         label = category.name,
@@ -729,7 +740,7 @@ fun HeroBanner(
                 shape = ButtonDefaults.shape(shape = RoundedCornerShape(24.dp)),
                 modifier = Modifier
                     .height(44.dp)
-                    .focusRequester(playButtonFocusRequester) // Hero Play button initial focus target
+                    .focusRequester(playButtonFocusRequester)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
