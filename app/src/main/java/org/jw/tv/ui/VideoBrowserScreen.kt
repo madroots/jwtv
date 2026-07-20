@@ -129,7 +129,7 @@ fun VideoBrowserScreen(
         scrollJob = coroutineScope.launch {
             try {
                 if (rowIndex <= 1) {
-                    listState.scrollToItem(0, 0) // instant 0ms snap to top
+                    listState.scrollToItem(0, 0)
                 } else {
                     listState.animateScrollToItem(rowIndex, -100)
                 }
@@ -211,7 +211,6 @@ fun VideoBrowserScreen(
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(bottom = 10.dp)
                                     )
-                                    // parentFraction = 0.08f lets the previous card stick out ~8% on left edge
                                     TvLazyRow(
                                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                                         pivotOffsets = androidx.tv.foundation.PivotOffsets(parentFraction = 0.08f),
@@ -279,7 +278,6 @@ fun VideoBrowserScreen(
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(bottom = 10.dp)
                                     )
-                                    // parentFraction = 0.08f lets the previous card stick out ~8% on left edge
                                     TvLazyRow(
                                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                                         pivotOffsets = androidx.tv.foundation.PivotOffsets(parentFraction = 0.08f),
@@ -303,7 +301,7 @@ fun VideoBrowserScreen(
             }
         }
 
-        // ── Sidebar (Animated Width — icons always 100% visible) ────────────────────
+        // ── Sidebar (Animated Width) ────────────────────────────────────────────────
         Column(
             modifier = Modifier
                 .width(sidebarWidth)
@@ -520,7 +518,7 @@ fun VideoBrowserScreen(
     }
 }
 
-// ── Continue Watching Card (No Scale, 2dp White Border on Focus) ─────────────
+// ── Continue Watching Card (ZERO Scale, 2dp White Border on Focus) ───────────
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -542,7 +540,7 @@ fun ContinueWatchingCard(
         (progress.positionMs.toFloat() / progress.durationMs.toFloat()).coerceIn(0f, 1f)
     } else 0f
 
-    // Surface handles focus highlight via BorderStroke(2.dp, Color.White) — zero scaling/overlap!
+    // Explicit scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f) forces ZERO scaling/zoom!
     Surface(
         onClick = onClick,
         colors = ClickableSurfaceDefaults.colors(
@@ -556,6 +554,7 @@ fun ContinueWatchingCard(
                 shape = RoundedCornerShape(10.dp)
             )
         ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
         modifier = modifier
             .width(220.dp)
             .aspectRatio(16f / 9f)
@@ -640,7 +639,7 @@ private fun SidebarItem(
     }
 }
 
-// ── Hero banner ──────────────────────────────────────────────────────────────
+// ── Hero banner (Button focusedScale = 1.0f) ──────────────────────────────────
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -721,6 +720,7 @@ fun HeroBanner(
                     containerColor = Color(0xFFE50914),
                     focusedContainerColor = Color(0xFFFF1E27)
                 ),
+                scale = ButtonDefaults.scale(focusedScale = 1.0f),
                 shape = ButtonDefaults.shape(shape = RoundedCornerShape(24.dp)),
                 modifier = Modifier
                     .height(44.dp)
@@ -744,7 +744,7 @@ fun HeroBanner(
     }
 }
 
-// ── Video card (No Scale, 2dp White Border on Focus) ─────────────────────────
+// ── Video card (ZERO Scale, 2dp White Border on Focus) ───────────────────────
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -762,7 +762,7 @@ fun VideoCard(
             .build()
     }
 
-    // Surface handles focus highlight via BorderStroke(2.dp, Color.White) — zero scaling/overlap!
+    // Explicit scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f) forces ZERO scaling/zoom!
     Surface(
         onClick = onClick,
         colors = ClickableSurfaceDefaults.colors(
@@ -776,6 +776,7 @@ fun VideoCard(
                 shape = RoundedCornerShape(10.dp)
             )
         ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
         modifier = modifier
             .width(220.dp)
             .aspectRatio(16f / 9f)
