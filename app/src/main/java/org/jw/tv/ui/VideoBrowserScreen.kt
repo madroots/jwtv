@@ -40,6 +40,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -49,7 +50,6 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -67,7 +67,6 @@ import coil.request.ImageRequest
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import androidx.compose.ui.ExperimentalComposeUiApi
 import org.jw.tv.BuildConfig
 import org.jw.tv.api.MediaItem
 import org.jw.tv.api.MediatorClient
@@ -123,12 +122,8 @@ fun VideoBrowserScreen(
         } catch (e: Exception) { 1 }
     }
 
-    // Bug 4 Fix: Track scroll job to cancel competing scroll animations on rapid D-pad input
     var scrollJob by remember { mutableStateOf<Job?>(null) }
 
-    // Smart row focus handler:
-    // - Row 0 (Hero) & Row 1 (1st video row): instant snap at (0, 0) — ZERO scroll!
-    // - Row >= 2 (2nd row+): smooth scroll so focused row is centered on screen
     fun handleRowFocus(rowIndex: Int) {
         scrollJob?.cancel()
         scrollJob = coroutineScope.launch {
@@ -145,8 +140,6 @@ fun VideoBrowserScreen(
     Box(modifier = modifier.fillMaxSize().background(Color(0xFF090B0E))) {
 
         // ── Main content (fixed 70dp inset) ──────────────────────────────────
-        // Bug 1 Fix: Removed aggressive Box.onKeyEvent that intercepted D-pad Left.
-        // D-pad Left now navigates card-by-card in rows, and moves to sidebar on card 1!
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -199,7 +192,7 @@ fun VideoBrowserScreen(
                             }
                         }
 
-                        // Row 1 (or 0 if no hero): Continue Watching Row (Home screen only)
+                        // Row 1 (or 0 if no hero): Continue Watching Row
                         val isHome = viewModel.currentCategory == null || viewModel.currentCategory?.key == "VideoOnDemand"
                         if (isHome && viewModel.continueWatchingList.isNotEmpty()) {
                             val continueIndex = tvColumnItemCounter++
@@ -208,7 +201,6 @@ fun VideoBrowserScreen(
                                     Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 24.dp, vertical = 12.dp)
-                                        // Bug 2 Fix: D-pad UP from 1st row goes straight to Hero Play button!
                                         .focusProperties { up = heroPlayFocusRequester }
                                         .onFocusChanged { if (it.hasFocus) handleRowFocus(continueIndex) }
                                 ) {
@@ -219,10 +211,10 @@ fun VideoBrowserScreen(
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(bottom = 10.dp)
                                     )
-                                    // Bug 3 Fix: focusRestorer() + stable keys prevent column jumping
+                                    // parentFraction = 0.08f lets the previous card stick out ~8% on left edge
                                     TvLazyRow(
                                         horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                        pivotOffsets = androidx.tv.foundation.PivotOffsets(parentFraction = 0f),
+                                        pivotOffsets = androidx.tv.foundation.PivotOffsets(parentFraction = 0.08f),
                                         modifier = Modifier.focusRestorer()
                                     ) {
                                         items(
@@ -260,7 +252,7 @@ fun VideoBrowserScreen(
                                 }
                             }
                         } else {
-                            // Subcategory Rows with stable item keys (Bug 3 Fix)
+                            // Subcategory Rows
                             val baseSubcatIndex = tvColumnItemCounter
                             itemsIndexed(
                                 items = viewModel.subcategoriesWithMedia,
@@ -287,10 +279,10 @@ fun VideoBrowserScreen(
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(bottom = 10.dp)
                                     )
-                                    // Bug 3 Fix: focusRestorer() + stable contentId keys
+                                    // parentFraction = 0.08f lets the previous card stick out ~8% on left edge
                                     TvLazyRow(
                                         horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                        pivotOffsets = androidx.tv.foundation.PivotOffsets(parentFraction = 0f),
+                                        pivotOffsets = androidx.tv.foundation.PivotOffsets(parentFraction = 0.08f),
                                         modifier = Modifier.focusRestorer()
                                     ) {
                                         items(
@@ -528,7 +520,7 @@ fun VideoBrowserScreen(
     }
 }
 
-// ── Continue Watching Card ───────────────────────────────────────────────────
+// ── Continue Watching Card (No Scale, 2dp White Border on Focus) ─────────────
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -538,13 +530,6 @@ fun ContinueWatchingCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var isFocused by remember { mutableStateOf(false) }
-
-    val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.06f else 1.0f,
-        animationSpec = tween(durationMillis = 120),
-        label = "cardScale"
-    )
 
     val imageRequest = remember(progress.thumbnailUrl) {
         ImageRequest.Builder(context)
@@ -557,6 +542,7 @@ fun ContinueWatchingCard(
         (progress.positionMs.toFloat() / progress.durationMs.toFloat()).coerceIn(0f, 1f)
     } else 0f
 
+    // Surface handles focus highlight via BorderStroke(2.dp, Color.White) — zero scaling/overlap!
     Surface(
         onClick = onClick,
         colors = ClickableSurfaceDefaults.colors(
@@ -573,8 +559,6 @@ fun ContinueWatchingCard(
         modifier = modifier
             .width(220.dp)
             .aspectRatio(16f / 9f)
-            .onFocusChanged { isFocused = it.isFocused }
-            .graphicsLayer { scaleX = scale; scaleY = scale }
     ) {
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -760,7 +744,7 @@ fun HeroBanner(
     }
 }
 
-// ── Video card ───────────────────────────────────────────────────────────────
+// ── Video card (No Scale, 2dp White Border on Focus) ─────────────────────────
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -770,13 +754,6 @@ fun VideoCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var isFocused by remember { mutableStateOf(false) }
-
-    val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.06f else 1.0f,
-        animationSpec = tween(durationMillis = 120),
-        label = "cardScale"
-    )
 
     val imageRequest = remember(video) {
         ImageRequest.Builder(context)
@@ -785,6 +762,7 @@ fun VideoCard(
             .build()
     }
 
+    // Surface handles focus highlight via BorderStroke(2.dp, Color.White) — zero scaling/overlap!
     Surface(
         onClick = onClick,
         colors = ClickableSurfaceDefaults.colors(
@@ -801,8 +779,6 @@ fun VideoCard(
         modifier = modifier
             .width(220.dp)
             .aspectRatio(16f / 9f)
-            .onFocusChanged { isFocused = it.isFocused }
-            .graphicsLayer { scaleX = scale; scaleY = scale }
     ) {
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
