@@ -13,6 +13,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Accessibility
@@ -39,6 +42,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
@@ -61,8 +65,6 @@ import androidx.compose.ui.zIndex
 import androidx.tv.foundation.lazy.list.TvLazyColumn
 import androidx.tv.foundation.lazy.list.TvLazyRow
 import androidx.tv.foundation.lazy.list.items
-import androidx.tv.foundation.lazy.list.itemsIndexed
-import androidx.tv.foundation.lazy.list.rememberTvLazyListState
 import androidx.tv.material3.*
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
@@ -96,13 +98,14 @@ fun VideoBrowserScreen(
     val sidebarFirstFocus = remember { FocusRequester() }
     val heroPlayFocusRequester = remember { FocusRequester() }
 
-    val listState = rememberTvLazyListState()
+    // Standard LazyColumn state — no intrusive TV pivot-scrolling engine!
+    val listState = rememberLazyListState()
     val currentCategoryKey = viewModel.currentCategory?.key
 
     // Initial focus on app launch / category change: land directly on Hero's "Play Now" button!
     LaunchedEffect(currentCategoryKey, viewModel.uiState) {
         if (viewModel.uiState is UiState.Success) {
-            delay(150) // let layout settle before requesting focus
+            delay(100)
             try {
                 heroPlayFocusRequester.requestFocus()
                 listState.scrollToItem(0, 0)
@@ -123,15 +126,15 @@ fun VideoBrowserScreen(
         } catch (e: Exception) { 1 }
     }
 
-    // Helper: Smart focus scrolling strategy
-    // - Item 0 (Hero) & Item 1 (1st video row): keep list pinned at (0, 0) — ZERO scroll!
-    // - Item >= 2 (2nd row+): scroll so focused row is centered in the middle of screen
-    fun handleRowFocus(itemIndexInColumn: Int) {
+    // Smart row focus handler:
+    // - Row 0 (Hero) & Row 1 (1st video row): pin list at (0, 0) — ZERO scroll!
+    // - Row >= 2 (2nd row+): animate scroll so focused row is centered on screen
+    fun handleRowFocus(rowIndex: Int) {
         coroutineScope.launch {
-            if (itemIndexInColumn <= 1) {
-                listState.scrollToItem(0, 0)
+            if (rowIndex <= 1) {
+                listState.animateScrollToItem(0, 0)
             } else {
-                listState.animateScrollToItem(itemIndexInColumn, -160)
+                listState.animateScrollToItem(rowIndex, -100)
             }
         }
     }
@@ -152,10 +155,10 @@ fun VideoBrowserScreen(
                     } else false
                 }
         ) {
-            TvLazyColumn(
+            // Standard LazyColumn: standard viewport scrolling without TV pivot override
+            LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxSize(),
-                pivotOffsets = androidx.tv.foundation.PivotOffsets(parentFraction = 0f)
+                modifier = Modifier.fillMaxSize()
             ) {
                 when (val state = viewModel.uiState) {
                     is UiState.Loading -> item {
@@ -185,7 +188,7 @@ fun VideoBrowserScreen(
                     is UiState.Success -> {
                         var tvColumnItemCounter = 0
 
-                        // Item 0: Featured Hero Banner
+                        // Row 0: Featured Hero Banner
                         val featured = viewModel.featuredVideo
                             ?: viewModel.subcategoriesWithMedia.firstOrNull()?.videos?.firstOrNull()
                         if (featured != null) {
@@ -200,7 +203,7 @@ fun VideoBrowserScreen(
                             }
                         }
 
-                        // Item 1: Continue Watching Row (Home screen only)
+                        // Row 1 (or 0 if no hero): Continue Watching Row (Home screen only)
                         val isHome = viewModel.currentCategory == null || viewModel.currentCategory?.key == "VideoOnDemand"
                         if (isHome && viewModel.continueWatchingList.isNotEmpty()) {
                             val continueIndex = tvColumnItemCounter++
@@ -209,6 +212,8 @@ fun VideoBrowserScreen(
                                     Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 24.dp, vertical = 12.dp)
+                                        // Guaranteed D-pad UP from Continue Watching row to Hero Play button
+                                        .focusProperties { up = heroPlayFocusRequester }
                                         .onFocusChanged { if (it.hasFocus) handleRowFocus(continueIndex) }
                                 ) {
                                     Text(
@@ -254,14 +259,22 @@ fun VideoBrowserScreen(
                                 }
                             }
                         } else {
-                            // Subcategory Rows (Item 1 if hero was null, or Item 2+ if hero/continue present)
+                            // Subcategory Rows
                             val baseSubcatIndex = tvColumnItemCounter
                             itemsIndexed(viewModel.subcategoriesWithMedia) { idx, subcat ->
                                 val rowItemIndex = baseSubcatIndex + idx
+                                val isFirstVideoRow = rowItemIndex == 1
+
                                 Column(
                                     Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 24.dp, vertical = 12.dp)
+                                        // If this is Row 1 (first row below hero), D-pad UP goes straight to Hero Play button!
+                                        .then(
+                                            if (isFirstVideoRow) {
+                                                Modifier.focusProperties { up = heroPlayFocusRequester }
+                                            } else Modifier
+                                        )
                                         .onFocusChanged { if (it.hasFocus) handleRowFocus(rowItemIndex) }
                                 ) {
                                     Text(
