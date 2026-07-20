@@ -61,10 +61,12 @@ import androidx.compose.ui.zIndex
 import androidx.tv.foundation.lazy.list.TvLazyColumn
 import androidx.tv.foundation.lazy.list.TvLazyRow
 import androidx.tv.foundation.lazy.list.items
+import androidx.tv.foundation.lazy.list.itemsIndexed
 import androidx.tv.foundation.lazy.list.rememberTvLazyListState
 import androidx.tv.material3.*
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jw.tv.BuildConfig
 import org.jw.tv.api.MediaItem
@@ -85,8 +87,6 @@ fun VideoBrowserScreen(
 
     var sidebarExpanded by remember { mutableStateOf(false) }
 
-    // Sidebar width animation: when collapsed (70dp), the icon rail stays 100% visible.
-    // When expanded (240dp), it expands smoothly over the main content (zIndex = 30f).
     val sidebarWidth by animateDpAsState(
         targetValue = if (sidebarExpanded) SIDEBAR_FULL_DP else SIDEBAR_ICON_DP,
         animationSpec = tween(durationMillis = 250),
@@ -94,11 +94,20 @@ fun VideoBrowserScreen(
     )
 
     val sidebarFirstFocus = remember { FocusRequester() }
+    val heroPlayFocusRequester = remember { FocusRequester() }
 
     val listState = rememberTvLazyListState()
     val currentCategoryKey = viewModel.currentCategory?.key
+
+    // Initial focus on app launch / category change: land directly on Hero's "Play Now" button!
     LaunchedEffect(currentCategoryKey, viewModel.uiState) {
-        if (viewModel.uiState is UiState.Success) listState.animateScrollToItem(0)
+        if (viewModel.uiState is UiState.Success) {
+            delay(150) // let layout settle before requesting focus
+            try {
+                heroPlayFocusRequester.requestFocus()
+                listState.scrollToItem(0, 0)
+            } catch (e: Exception) {}
+        }
     }
 
     var selectedVideoForDetails by remember { mutableStateOf<MediaItem?>(null) }
@@ -114,9 +123,22 @@ fun VideoBrowserScreen(
         } catch (e: Exception) { 1 }
     }
 
+    // Helper: Smart focus scrolling strategy
+    // - Item 0 (Hero) & Item 1 (1st video row): keep list pinned at (0, 0) — ZERO scroll!
+    // - Item >= 2 (2nd row+): scroll so focused row is centered in the middle of screen
+    fun handleRowFocus(itemIndexInColumn: Int) {
+        coroutineScope.launch {
+            if (itemIndexInColumn <= 1) {
+                listState.scrollToItem(0, 0)
+            } else {
+                listState.animateScrollToItem(itemIndexInColumn, -160)
+            }
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize().background(Color(0xFF090B0E))) {
 
-        // ── Main content (fixed 70dp inset — never moves when sidebar expands) ───────
+        // ── Main content (fixed 70dp inset) ──────────────────────────────────
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -161,30 +183,33 @@ fun VideoBrowserScreen(
                     }
 
                     is UiState.Success -> {
-                        // Featured Hero Banner at top of page (y = 0)
+                        var tvColumnItemCounter = 0
+
+                        // Item 0: Featured Hero Banner
                         val featured = viewModel.featuredVideo
                             ?: viewModel.subcategoriesWithMedia.firstOrNull()?.videos?.firstOrNull()
                         if (featured != null) {
+                            val heroIndex = tvColumnItemCounter++
                             item {
                                 HeroBanner(
                                     video = featured,
+                                    playButtonFocusRequester = heroPlayFocusRequester,
                                     onPlay = { selectedVideoForDetails = featured },
-                                    onFocused = {
-                                        // Pin list scroll position at (0, 0) whenever hero is focused
-                                        coroutineScope.launch { listState.scrollToItem(0, 0) }
-                                    }
+                                    onFocused = { handleRowFocus(heroIndex) }
                                 )
                             }
                         }
 
-                        // Continue Watching Row (Home screen only)
+                        // Item 1: Continue Watching Row (Home screen only)
                         val isHome = viewModel.currentCategory == null || viewModel.currentCategory?.key == "VideoOnDemand"
                         if (isHome && viewModel.continueWatchingList.isNotEmpty()) {
+                            val continueIndex = tvColumnItemCounter++
                             item {
                                 Column(
                                     Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 24.dp, vertical = 12.dp)
+                                        .onFocusChanged { if (it.hasFocus) handleRowFocus(continueIndex) }
                                 ) {
                                     Text(
                                         text = "Continue Watching",
@@ -229,11 +254,15 @@ fun VideoBrowserScreen(
                                 }
                             }
                         } else {
-                            items(viewModel.subcategoriesWithMedia) { subcat ->
+                            // Subcategory Rows (Item 1 if hero was null, or Item 2+ if hero/continue present)
+                            val baseSubcatIndex = tvColumnItemCounter
+                            itemsIndexed(viewModel.subcategoriesWithMedia) { idx, subcat ->
+                                val rowItemIndex = baseSubcatIndex + idx
                                 Column(
                                     Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 24.dp, vertical = 12.dp)
+                                        .onFocusChanged { if (it.hasFocus) handleRowFocus(rowItemIndex) }
                                 ) {
                                     Text(
                                         text = subcat.name,
@@ -261,7 +290,7 @@ fun VideoBrowserScreen(
             }
         }
 
-        // ── Sidebar (Animated Width — icons always 100% visible on screen) ───────────
+        // ── Sidebar (Animated Width — icons always 100% visible) ────────────────────
         Column(
             modifier = Modifier
                 .width(sidebarWidth)
@@ -314,7 +343,10 @@ fun VideoBrowserScreen(
                         focusRequester = sidebarFirstFocus,
                         onClick = {
                             viewModel.loadRootCategories()
-                            coroutineScope.launch { listState.animateScrollToItem(0) }
+                            coroutineScope.launch {
+                                try { heroPlayFocusRequester.requestFocus() } catch (e: Exception) {}
+                                listState.animateScrollToItem(0)
+                            }
                         }
                     )
                 }
@@ -606,6 +638,7 @@ private fun SidebarItem(
 @Composable
 fun HeroBanner(
     video: MediaItem,
+    playButtonFocusRequester: FocusRequester,
     onPlay: () -> Unit,
     onFocused: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -681,7 +714,9 @@ fun HeroBanner(
                     focusedContainerColor = Color(0xFFFF1E27)
                 ),
                 shape = ButtonDefaults.shape(shape = RoundedCornerShape(24.dp)),
-                modifier = Modifier.height(44.dp)
+                modifier = Modifier
+                    .height(44.dp)
+                    .focusRequester(playButtonFocusRequester) // Hero Play button initial focus target
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -786,7 +821,7 @@ fun VideoCard(
     }
 }
 
-// ── Shimmer placeholder (UX-3) ───────────────────────────────────────────────
+// ── Shimmer placeholder ──────────────────────────────────────────────────────
 
 @Composable
 fun ShimmerBox(modifier: Modifier = Modifier) {
