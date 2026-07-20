@@ -4,6 +4,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -72,7 +73,6 @@ import org.jw.tv.data.WatchProgressEntity
 
 private val SIDEBAR_FULL_DP = 240.dp
 private val SIDEBAR_ICON_DP = 70.dp
-private const val SIDEBAR_HIDDEN_OFFSET_DP = -(240 - 70)
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -84,10 +84,13 @@ fun VideoBrowserScreen(
     val coroutineScope = rememberCoroutineScope()
 
     var sidebarExpanded by remember { mutableStateOf(false) }
-    val sidebarOffset by animateFloatAsState(
-        targetValue = if (sidebarExpanded) 0f else SIDEBAR_HIDDEN_OFFSET_DP.toFloat(),
+
+    // Sidebar width animation: when collapsed (70dp), the icon rail stays 100% visible.
+    // When expanded (240dp), it expands smoothly over the main content (zIndex = 30f).
+    val sidebarWidth by animateDpAsState(
+        targetValue = if (sidebarExpanded) SIDEBAR_FULL_DP else SIDEBAR_ICON_DP,
         animationSpec = tween(durationMillis = 250),
-        label = "sidebarOffset"
+        label = "sidebarWidth"
     )
 
     val sidebarFirstFocus = remember { FocusRequester() }
@@ -113,7 +116,7 @@ fun VideoBrowserScreen(
 
     Box(modifier = modifier.fillMaxSize().background(Color(0xFF090B0E))) {
 
-        // ── Main content ─────────────────────────────────────────────────────
+        // ── Main content (fixed 70dp inset — never moves when sidebar expands) ───────
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -158,19 +161,23 @@ fun VideoBrowserScreen(
                     }
 
                     is UiState.Success -> {
-                        // Featured Hero Banner at top of page
+                        // Featured Hero Banner at top of page (y = 0)
                         val featured = viewModel.featuredVideo
                             ?: viewModel.subcategoriesWithMedia.firstOrNull()?.videos?.firstOrNull()
                         if (featured != null) {
                             item {
                                 HeroBanner(
                                     video = featured,
-                                    onPlay = { selectedVideoForDetails = featured }
+                                    onPlay = { selectedVideoForDetails = featured },
+                                    onFocused = {
+                                        // Pin list scroll position at (0, 0) whenever hero is focused
+                                        coroutineScope.launch { listState.scrollToItem(0, 0) }
+                                    }
                                 )
                             }
                         }
 
-                        // UX-4: "Continue Watching" Row (Home screen only)
+                        // Continue Watching Row (Home screen only)
                         val isHome = viewModel.currentCategory == null || viewModel.currentCategory?.key == "VideoOnDemand"
                         if (isHome && viewModel.continueWatchingList.isNotEmpty()) {
                             item {
@@ -254,13 +261,12 @@ fun VideoBrowserScreen(
             }
         }
 
-        // ── Sidebar (GPU translate) ──────────────────────────────────────────
+        // ── Sidebar (Animated Width — icons always 100% visible on screen) ───────────
         Column(
             modifier = Modifier
-                .width(SIDEBAR_FULL_DP)
+                .width(sidebarWidth)
                 .fillMaxHeight()
                 .zIndex(30f)
-                .graphicsLayer { translationX = sidebarOffset.dp.toPx() }
                 .background(Color(0xF00D1117))
                 .onFocusChanged { sidebarExpanded = it.hasFocus }
                 .padding(vertical = 24.dp)
@@ -284,7 +290,8 @@ fun VideoBrowserScreen(
                         "JW TV",
                         color = Color.White,
                         fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
                     )
                 }
             }
@@ -311,7 +318,6 @@ fun VideoBrowserScreen(
                         }
                     )
                 }
-                // ARCH-6: Favorites Sidebar Nav Item
                 item {
                     val isFavSelected = viewModel.currentCategory?.key == "FAVORITES"
                     SidebarItem(
@@ -365,7 +371,8 @@ fun VideoBrowserScreen(
                         text = "v${BuildConfig.VERSION_NAME} (${versionCode})",
                         color = Color(0xFF8B949E),
                         fontSize = 11.sp,
-                        modifier = Modifier.padding(start = 12.dp, top = 2.dp)
+                        modifier = Modifier.padding(start = 12.dp, top = 2.dp),
+                        maxLines = 1
                     )
                 }
             }
@@ -374,7 +381,6 @@ fun VideoBrowserScreen(
 
     // ── Overlays ─────────────────────────────────────────────────────────────
 
-    // UX-2: TV-Native Video Details Overlay
     selectedVideoForDetails?.let { video ->
         VideoDetailsDialog(
             video = video,
@@ -466,7 +472,7 @@ fun VideoBrowserScreen(
     }
 }
 
-// ── Continue Watching Card (UX-4) ────────────────────────────────────────────
+// ── Continue Watching Card ───────────────────────────────────────────────────
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -523,7 +529,6 @@ fun ContinueWatchingCard(
                     contentScale = ContentScale.Crop,
                     loading = { ShimmerBox(Modifier.fillMaxSize()) }
                 )
-                // Bottom Progress Bar
                 LinearProgressIndicator(
                     progress = { progressFraction },
                     color = Color(0xFFE50914),
@@ -602,9 +607,15 @@ private fun SidebarItem(
 fun HeroBanner(
     video: MediaItem,
     onPlay: () -> Unit,
+    onFocused: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Box(modifier = modifier.fillMaxWidth().height(310.dp)) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(310.dp)
+            .onFocusChanged { if (it.hasFocus) onFocused() }
+    ) {
         SubcomposeAsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(video.getThumbnailUrl())
@@ -810,7 +821,7 @@ fun ShimmerBox(modifier: Modifier = Modifier) {
     }
 }
 
-// ── TV-Native Video Details Overlay (UX-2 & ARCH-6) ──────────────────────────
+// ── TV-Native Video Details Overlay ──────────────────────────────────────────
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -849,10 +860,9 @@ fun VideoDetailsDialog(
             modifier = Modifier
                 .width(820.dp)
                 .height(440.dp)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {} // absorb click
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
         ) {
             Row(modifier = Modifier.fillMaxSize()) {
-                // Left 45% Poster preview
                 Box(modifier = Modifier.weight(0.45f).fillMaxHeight()) {
                     SubcomposeAsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
@@ -874,7 +884,6 @@ fun VideoDetailsDialog(
                     )
                 }
 
-                // Right 55% Details & Controls
                 Column(
                     modifier = Modifier
                         .weight(0.55f)
