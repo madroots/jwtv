@@ -106,7 +106,7 @@ fun VideoBrowserScreen(
                 if (isHome && viewModel.featuredVideo != null) {
                     heroPlayFocusRequester.requestFocus()
                 }
-                listState.scrollToItem(0, 0)
+                listState.animateScrollToItem(0, 0)
             } catch (e: Exception) {}
         }
     }
@@ -126,12 +126,15 @@ fun VideoBrowserScreen(
 
     var scrollJob by remember { mutableStateOf<Job?>(null) }
 
+    // Butter-smooth row focus handler:
+    // - Row 0 (Hero) & Row 1 (1st video row): smooth animateScrollToItem(0, 0)
+    // - Row >= 2 (2nd row+): smooth animateScrollToItem(rowIndex, -100)
     fun handleRowFocus(rowIndex: Int) {
         scrollJob?.cancel()
         scrollJob = coroutineScope.launch {
             try {
                 if (rowIndex <= 1) {
-                    listState.scrollToItem(0, 0) // instant 0ms snap to top
+                    listState.animateScrollToItem(0, 0) // butter-smooth animated scroll back to top!
                 } else {
                     listState.animateScrollToItem(rowIndex, -100)
                 }
@@ -304,7 +307,7 @@ fun VideoBrowserScreen(
             }
         }
 
-        // ── Sidebar (Animated Width) ────────────────────────────────────────────────
+        // ── Sidebar (Animated Width — icons & highlights perfectly contained) ────────
         Column(
             modifier = Modifier
                 .width(sidebarWidth)
@@ -519,7 +522,7 @@ fun VideoBrowserScreen(
     }
 }
 
-// ── Continue Watching Card ───────────────────────────────────────────────────
+// ── Continue Watching Card (ZERO Scale, 2dp White Border on Focus) ───────────
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -591,7 +594,7 @@ fun ContinueWatchingCard(
     }
 }
 
-// ── Sidebar item ─────────────────────────────────────────────────────────────
+// ── Sidebar item (Focused scale = 1.0f, Rounded shape, 8dp padding — zero overlap) ──
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -609,12 +612,15 @@ private fun SidebarItem(
             containerColor = if (selected) Color(0x22FFFFFF) else Color.Transparent,
             focusedContainerColor = Color(0x33FFFFFF)
         ),
+        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(8.dp)),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
         modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = 8.dp)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
     ) {
         Row(
-            Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+            Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             androidx.compose.material3.Icon(
@@ -742,7 +748,7 @@ fun HeroBanner(
     }
 }
 
-// ── Video card ───────────────────────────────────────────────────────────────
+// ── Video card (ZERO Scale, 2dp White Border on Focus) ───────────────────────
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
