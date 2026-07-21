@@ -13,6 +13,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Accessibility
@@ -174,15 +176,7 @@ fun VideoBrowserScreen(
                                 HeroBanner(
                                     video = featured,
                                     playButtonFocusRequester = heroPlayFocusRequester,
-                                    onPlay = { selectedVideoForDetails = featured },
-                                    onPlayFocused = {
-                                        // TvLazyColumn only scrolls far enough to reveal the
-                                        // focused Play button (bottom of the hero). Complete
-                                        // the scroll so the FULL hero is visible.
-                                        coroutineScope.launch {
-                                            try { listState.animateScrollToItem(0, 0) } catch (e: Exception) {}
-                                        }
-                                    }
+                                    onPlay = { selectedVideoForDetails = featured }
                                 )
                             }
                         }
@@ -635,19 +629,24 @@ private fun SidebarItem(
 
 // ── Hero banner ──────────────────────────────────────────────────────────────
 
-@OptIn(ExperimentalTvMaterial3Api::class)
+@OptIn(ExperimentalTvMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun HeroBanner(
     video: MediaItem,
     playButtonFocusRequester: FocusRequester,
     onPlay: () -> Unit,
-    onPlayFocused: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    // When the Play button is focused, ask the parent list to reveal the ENTIRE
+    // hero rect (not just the button) via the native bring-into-view mechanism —
+    // same animation as any other focus scroll, no competing coroutine scrolls.
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val heroScope = rememberCoroutineScope()
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(310.dp)
+            .bringIntoViewRequester(bringIntoViewRequester)
     ) {
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
@@ -717,7 +716,13 @@ fun HeroBanner(
                 modifier = Modifier
                     .height(44.dp)
                     .focusRequester(playButtonFocusRequester)
-                    .onFocusChanged { if (it.isFocused) onPlayFocused() }
+                    .onFocusChanged {
+                        if (it.isFocused) {
+                            heroScope.launch {
+                                try { bringIntoViewRequester.bringIntoView() } catch (e: Exception) {}
+                            }
+                        }
+                    }
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
