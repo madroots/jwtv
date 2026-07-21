@@ -1,6 +1,5 @@
 package org.jw.tv.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -12,7 +11,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -56,6 +54,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import androidx.tv.foundation.lazy.list.TvLazyColumn
 import androidx.tv.foundation.lazy.list.TvLazyRow
@@ -840,19 +840,23 @@ fun VideoDetailsDialog(
         try { playButtonFocusRequester.requestFocus() } catch (e: Exception) {}
     }
 
-    // TV BACK dismisses the dialog instead of falling through to the NavHost
-    // (browser is the start destination, so unhandled BACK finishes the Activity
-    // and looks like a crash).
-    BackHandler { onDismiss() }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.85f))
-            .zIndex(50f)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDismiss() },
-        contentAlignment = Alignment.Center
+    // Real window-modal Dialog: focus and input CANNOT escape to the content
+    // behind it. BACK fires onDismissRequest exactly once (dismissOnBackPress).
+    // dismissOnClickOutside = false: the only way out is BACK.
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false
+        )
     ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.85f)),
+            contentAlignment = Alignment.Center
+        ) {
         Surface(
             onClick = {},
             colors = ClickableSurfaceDefaults.colors(
@@ -860,10 +864,10 @@ fun VideoDetailsDialog(
                 focusedContainerColor = Color(0xFF161B22)
             ),
             shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(16.dp)),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
             modifier = Modifier
                 .width(820.dp)
                 .height(440.dp)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
         ) {
             Row(modifier = Modifier.fillMaxSize()) {
                 Box(modifier = Modifier.weight(0.45f).fillMaxHeight()) {
@@ -963,6 +967,7 @@ fun VideoDetailsDialog(
                     }
                 }
             }
+        }
         }
     }
 }

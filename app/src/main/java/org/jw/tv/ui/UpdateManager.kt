@@ -13,6 +13,16 @@ import java.io.File
 import java.io.FileOutputStream
 
 object UpdateManager {
+    // Dedicated download client: the shared client has callTimeout(10s) which
+    // kills a 9.5MB APK download mid-stream on slower TV connections — the
+    // installer then never launches and the failure is silent.
+    private val downloadClient by lazy {
+        MediatorClient.client.newBuilder()
+            .callTimeout(0, java.util.concurrent.TimeUnit.SECONDS)   // no whole-call cap for large files
+            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)  // stall detection only
+            .build()
+    }
+
     suspend fun downloadAndInstallApk(
         context: Context,
         apkUrl: String,
@@ -20,7 +30,7 @@ object UpdateManager {
     ): Boolean = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder().url(apkUrl).build()
-            MediatorClient.client.newCall(request).execute().use { response ->
+            downloadClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@withContext false
                 
                 val body = response.body ?: return@withContext false

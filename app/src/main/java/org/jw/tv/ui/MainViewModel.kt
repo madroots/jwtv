@@ -146,11 +146,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun startDownload(apkUrl: String, context: Context) {
         isDownloadingUpdate = true
         viewModelScope.launch {
-            UpdateManager.downloadAndInstallApk(
+            val ok = UpdateManager.downloadAndInstallApk(
                 context, apkUrl,
                 onProgress = { progress -> downloadProgress = progress }
             )
             isDownloadingUpdate = false
+            downloadProgress = 0f
+            if (!ok) {
+                updateCheckMessage = "Update download failed. Please try again."
+            }
         }
     }
 
