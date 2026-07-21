@@ -433,6 +433,10 @@ fun VideoBrowserScreen(
     }
 
     if (viewModel.updateAvailable && !viewModel.updateDialogDismissed) {
+        val updateFocusRequester = remember { FocusRequester() }
+        LaunchedEffect(Unit) {
+            try { updateFocusRequester.requestFocus() } catch (e: Exception) {}
+        }
         AlertDialog(
             onDismissRequest = { viewModel.dismissUpdateDialog() },
             title = { Text("Update Available", color = Color.White) },
@@ -450,12 +454,35 @@ fun VideoBrowserScreen(
                     },
                     colors = ButtonDefaults.colors(
                         containerColor = Color(0xFFE50914),
-                        focusedContainerColor = Color(0xFFFF1E27)
-                    )
+                        contentColor = Color.White,
+                        focusedContainerColor = Color(0xFFFF1E27),
+                        focusedContentColor = Color.White
+                    ),
+                    scale = ButtonDefaults.scale(focusedScale = 1.0f),
+                    border = ButtonDefaults.border(
+                        focusedBorder = Border(
+                            border = BorderStroke(3.dp, Color.White),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                    ),
+                    modifier = Modifier.focusRequester(updateFocusRequester)
                 ) { Text("Update") }
             },
             dismissButton = {
-                OutlinedButton(onClick = { viewModel.dismissUpdateDialog() }) { Text("Later") }
+                OutlinedButton(
+                    onClick = { viewModel.dismissUpdateDialog() },
+                    colors = ButtonDefaults.colors(
+                        contentColor = Color.White,
+                        focusedContentColor = Color.White
+                    ),
+                    scale = ButtonDefaults.scale(focusedScale = 1.0f),
+                    border = ButtonDefaults.border(
+                        focusedBorder = Border(
+                            border = BorderStroke(2.dp, Color.White),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                    )
+                ) { Text("Later") }
             },
             containerColor = Color(0xFF1E1E1E),
             titleContentColor = Color.White,
@@ -710,9 +737,17 @@ fun HeroBanner(
                 onClick = onPlay,
                 colors = ButtonDefaults.colors(
                     containerColor = Color(0xFFE50914),
-                    focusedContainerColor = Color(0xFFFF1E27)
+                    contentColor = Color.White,
+                    focusedContainerColor = Color(0xFFFF1E27),
+                    focusedContentColor = Color.White
                 ),
                 scale = ButtonDefaults.scale(focusedScale = 1.0f),
+                border = ButtonDefaults.border(
+                    focusedBorder = Border(
+                        border = BorderStroke(3.dp, Color.White),
+                        shape = RoundedCornerShape(24.dp)
+                    )
+                ),
                 shape = ButtonDefaults.shape(shape = RoundedCornerShape(24.dp)),
                 modifier = Modifier
                     .height(44.dp)
@@ -866,11 +901,11 @@ fun VideoDetailsDialog(
             shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(16.dp)),
             scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
             modifier = Modifier
-                .width(820.dp)
-                .height(440.dp)
+                .width(880.dp)
+                .height(470.dp)
         ) {
             Row(modifier = Modifier.fillMaxSize()) {
-                Box(modifier = Modifier.weight(0.45f).fillMaxHeight()) {
+                Box(modifier = Modifier.weight(0.58f).fillMaxHeight()) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(video.getThumbnailUrl())
@@ -880,11 +915,13 @@ fun VideoDetailsDialog(
                         modifier = Modifier.fillMaxSize().background(Color(0xFF1A1F27)),
                         contentScale = ContentScale.Crop
                     )
+                    // Gradient spans the full image width and dissolves exactly
+                    // where the controls panel begins.
                     Box(
                         Modifier.fillMaxSize().background(
                             Brush.horizontalGradient(
                                 colors = listOf(Color.Transparent, Color(0xFF161B22)),
-                                startX = 200f, endX = 500f
+                                startX = 300f, endX = 1020f
                             )
                         )
                     )
@@ -892,7 +929,7 @@ fun VideoDetailsDialog(
 
                 Column(
                     modifier = Modifier
-                        .weight(0.55f)
+                        .weight(0.42f)
                         .fillMaxHeight()
                         .padding(24.dp),
                     verticalArrangement = Arrangement.SpaceBetween
@@ -923,15 +960,45 @@ fun VideoDetailsDialog(
                             OutlinedButton(
                                 onClick = { chosenResolution = null },
                                 colors = ButtonDefaults.colors(
-                                    containerColor = if (chosenResolution == null) Color(0xFF34495E) else Color.Transparent
-                                )
+                                    containerColor = if (chosenResolution == null) Color(0xFF34495E) else Color.Transparent,
+                                    contentColor = Color.White,
+                                    focusedContainerColor = if (chosenResolution == null) Color(0xFF46637E) else Color(0xFF2A3644),
+                                    focusedContentColor = Color.White
+                                ),
+                                scale = ButtonDefaults.scale(focusedScale = 1.0f),
+                                border = ButtonDefaults.border(
+                                    border = Border(
+                                        border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
+                                        shape = RoundedCornerShape(20.dp)
+                                    ),
+                                    focusedBorder = Border(
+                                        border = BorderStroke(2.dp, Color.White),
+                                        shape = RoundedCornerShape(20.dp)
+                                    )
+                                ),
+                                shape = ButtonDefaults.shape(shape = RoundedCornerShape(20.dp))
                             ) { Text("Auto") }
                             resolutions.forEach { res ->
                                 OutlinedButton(
                                     onClick = { chosenResolution = res },
                                     colors = ButtonDefaults.colors(
-                                        containerColor = if (chosenResolution == res) Color(0xFF34495E) else Color.Transparent
-                                    )
+                                        containerColor = if (chosenResolution == res) Color(0xFF34495E) else Color.Transparent,
+                                        contentColor = Color.White,
+                                        focusedContainerColor = if (chosenResolution == res) Color(0xFF46637E) else Color(0xFF2A3644),
+                                        focusedContentColor = Color.White
+                                    ),
+                                    scale = ButtonDefaults.scale(focusedScale = 1.0f),
+                                    border = ButtonDefaults.border(
+                                        border = Border(
+                                            border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
+                                            shape = RoundedCornerShape(20.dp)
+                                        ),
+                                        focusedBorder = Border(
+                                            border = BorderStroke(2.dp, Color.White),
+                                            shape = RoundedCornerShape(20.dp)
+                                        )
+                                    ),
+                                    shape = ButtonDefaults.shape(shape = RoundedCornerShape(20.dp))
                                 ) { Text(res) }
                             }
                         }
@@ -943,7 +1010,16 @@ fun VideoDetailsDialog(
                                 onClick = { onPlay(chosenResolution) },
                                 colors = ButtonDefaults.colors(
                                     containerColor = Color(0xFFE50914),
-                                    focusedContainerColor = Color(0xFFFF1E27)
+                                    contentColor = Color.White,
+                                    focusedContainerColor = Color(0xFFFF1E27),
+                                    focusedContentColor = Color.White
+                                ),
+                                scale = ButtonDefaults.scale(focusedScale = 1.0f),
+                                border = ButtonDefaults.border(
+                                    focusedBorder = Border(
+                                        border = BorderStroke(3.dp, Color.White),
+                                        shape = RoundedCornerShape(24.dp)
+                                    )
                                 ),
                                 shape = ButtonDefaults.shape(shape = RoundedCornerShape(24.dp)),
                                 modifier = Modifier
@@ -955,6 +1031,22 @@ fun VideoDetailsDialog(
 
                             OutlinedButton(
                                 onClick = { viewModel.toggleFavorite(video) },
+                                colors = ButtonDefaults.colors(
+                                    contentColor = Color.White,
+                                    focusedContainerColor = Color(0xFF2A3644),
+                                    focusedContentColor = Color.White
+                                ),
+                                scale = ButtonDefaults.scale(focusedScale = 1.0f),
+                                border = ButtonDefaults.border(
+                                    border = Border(
+                                        border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
+                                        shape = RoundedCornerShape(24.dp)
+                                    ),
+                                    focusedBorder = Border(
+                                        border = BorderStroke(2.dp, Color.White),
+                                        shape = RoundedCornerShape(24.dp)
+                                    )
+                                ),
                                 shape = ButtonDefaults.shape(shape = RoundedCornerShape(24.dp)),
                                 modifier = Modifier.height(44.dp)
                             ) {
