@@ -144,27 +144,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissUpdateDialog() { updateDialogDismissed = true }
 
-    fun startDownload(apkUrl: String, context: Context) {
+    fun startDownload(apkUrl: String) {
+        val app = getApplication<Application>()
         isDownloadingUpdate = true
         viewModelScope.launch {
             val apkFile = UpdateManager.downloadApk(
-                context, apkUrl,
+                app, apkUrl,
                 onProgress = { progress -> downloadProgress = progress }
             )
-            // Dismiss the progress overlay FIRST so the Activity is in a clean
-            // foreground state before we fire the install intent.  On some TV
-            // firmware the package-installer intent is silently dropped when a
-            // Dialog/AlertDialog is in front of the Activity window.
+            // Dismiss progress overlay before firing install intent — some TV
+            // firmware silently drops startActivity() when a Dialog is in front
+            // of the Activity window.
             isDownloadingUpdate = false
             downloadProgress = 0f
             if (apkFile == null) {
                 updateCheckMessage = "Update download failed. Please try again."
                 return@launch
             }
-            // Small yield so Compose recomposition removes the progress dialog
-            // from the window before startActivity is called.
-            delay(300L)
-            UpdateManager.installApk(context, apkFile)
+            // Let Compose recompose and remove the progress dialog from the
+            // window before startActivity() is called.
+            delay(400L)
+            UpdateManager.installApk(app, apkFile)
         }
     }
 

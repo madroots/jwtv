@@ -1,6 +1,6 @@
 package org.jw.tv.ui
 
-import android.content.Context
+import android.app.Application
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -13,25 +13,26 @@ import java.io.File
 import java.io.FileOutputStream
 
 object UpdateManager {
-    // Dedicated download client: the shared client has callTimeout(10s) which
-    // kills a 9.5MB APK download mid-stream on slower TV connections — the
-    // installer then never launches and the failure is silent.
     private val downloadClient by lazy {
         MediatorClient.client.newBuilder()
-            .callTimeout(0, java.util.concurrent.TimeUnit.SECONDS)   // no whole-call cap for large files
-            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)  // stall detection only
+            .callTimeout(0, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
             .build()
     }
 
-    // Returns the downloaded File on success, null on failure.
+    // Takes Application (not Activity) context so it remains valid across the
+    // entire download — Activity context can be dead by the time a slow download
+    // finishes on TV hardware.
     suspend fun downloadApk(
-        context: Context,
+        app: Application,
         apkUrl: String,
         onProgress: (Float) -> Unit
     ): File? = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder().url(apkUrl).build()
-            val apkFile = File(context.externalCacheDir ?: context.cacheDir, "update.apk")
+            // Use internal cache only — externalCacheDir may require storage
+            // permissions on older TV firmware and can be null/unmounted.
+            val apkFile = File(app.cacheDir, "update.apk")
             if (apkFile.exists()) apkFile.delete()
 
             downloadClient.newCall(request).execute().use { response ->
@@ -51,9 +52,12 @@ object UpdateManager {
                                 onProgress(totalBytesRead.toFloat() / contentLength.toFloat())
                             }
                         }
+                        // fsync: flush OS page cache to storage so the
+                        // PackageInstaller (a separate process) reads a complete
+                        // file even on flash-backed TV storage.
+                        output.fd.sync()
                     }
                 }
-                // response.use {} closes here — HTTP connection fully released before we return
             }
             apkFile
         } catch (e: Exception) {
@@ -62,16 +66,21 @@ object UpdateManager {
         }
     }
 
-    suspend fun installApk(context: Context, apkFile: File) = withContext(Dispatchers.Main) {
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
-            val uri: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", apkFile)
-            } else {
-                Uri.fromFile(apkFile)
-            }
-            setDataAndType(uri, "application/vnd.android.package-archive")
+    suspend fun installApk(app: Application, apkFile: File) = withContext(Dispatchers.Main) {
+        val uri: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            FileProvider.getUriForFile(app, "${app.packageName}.fileprovider", apkFile)
+        } else {
+            Uri.fromFile(apkFile)
         }
-        context.startActivity(intent)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            // FLAG_ACTIVITY_NEW_TASK required when starting from Application context.
+            // FLAG_ACTIVITY_CLEAR_TOP ensures the PackageInstaller is brought to the
+            // foreground if it already exists from a prior (silently-failed) attempt.
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+        }
+        app.startActivity(intent)
     }
 }

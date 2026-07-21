@@ -50,6 +50,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -458,7 +459,7 @@ fun VideoBrowserScreen(
                 Button(
                     onClick = {
                         viewModel.dismissUpdateDialog()
-                        viewModel.startDownload(viewModel.updateApkUrl, context)
+                        viewModel.startDownload(viewModel.updateApkUrl)
                     },
                     colors = ButtonDefaults.colors(
                         containerColor = Color(0xFFE50914),
@@ -1140,9 +1141,18 @@ fun LanguageSelectionDialog(
                     placeholder = { Text("Search...", color = Color.Gray) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .onKeyEvent { event ->
+                        // onPreviewKeyEvent fires BEFORE BasicTextField's internal
+                        // key handler, so DPAD_DOWN is intercepted before the text
+                        // field can consume it for cursor movement.
+                        // Direct requestFocus() is more reliable than moveFocus()
+                        // from inside a text field on Compose TV.
+                        .onPreviewKeyEvent { event ->
                             if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
-                                focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)
+                                try {
+                                    firstItemFocus.requestFocus()
+                                } catch (_: Exception) {
+                                    focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)
+                                }
                                 true
                             } else false
                         },
