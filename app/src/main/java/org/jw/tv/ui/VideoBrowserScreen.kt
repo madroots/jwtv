@@ -324,8 +324,8 @@ fun VideoBrowserScreen(
                         Modifier.background(
                             Brush.horizontalGradient(
                                 colors = listOf(
-                                    Color(0xFF0A0C12),                               // solid dark left
-                                    Color(0xFF0A0C12).copy(alpha = 0.95f),            // near-solid behind text
+                                    Color(0xFF020305),                               // solid near-black left
+                                    Color(0xFF020305).copy(alpha = 0.95f),            // near-solid behind text
                                     Color.Transparent                                  // fades at right edge
                                 )
                             )
@@ -654,18 +654,17 @@ private fun SidebarItem(
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
-    // Red highlight pill: opaque red on left → 20% red → transparent dissolves
-    // into the sidebar background.  Active in BOTH collapsed and expanded states.
+    // ── Highlight: expanded = left-rounded gradient; collapsed = solid pill ──
     val highlightBrush = remember(isFocused, selected) {
         when {
-            isFocused -> Brush.horizontalGradient(
+            expanded && isFocused -> Brush.horizontalGradient(
                 colors = listOf(
                     Color(0xFFFF0033),
                     Color(0xFFFF0033).copy(alpha = 0.2f),
                     Color.Transparent
                 )
             )
-            selected -> Brush.horizontalGradient(
+            expanded && selected -> Brush.horizontalGradient(
                 colors = listOf(
                     Color(0xAAFF0033),
                     Color(0xAAFF0033).copy(alpha = 0.15f),
@@ -675,9 +674,19 @@ private fun SidebarItem(
             else -> null
         }
     }
-    // Left corners rounded (12dp), right corners = 0 so the gradient dissolves
-    // flush against the content — no visible rounded corner on the fading edge.
     val highlightShape = RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp)
+
+    // Collapsed: solid red pill with 6dp margin from each edge.
+    // Expanded:  left-rounded gradient as above.
+    val activeBackground = if (!expanded && (isFocused || selected)) {
+        Modifier.padding(start = 6.dp, end = 6.dp)
+            .background(
+                if (isFocused) Color(0xFFFF0033) else Color(0xAAFF0033),
+                RoundedCornerShape(12.dp)
+            )
+    } else if (expanded && highlightBrush != null) {
+        Modifier.background(highlightBrush, highlightShape)
+    } else Modifier
 
     Surface(
         onClick = onClick,
@@ -690,18 +699,13 @@ private fun SidebarItem(
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
         modifier = Modifier
             .fillMaxWidth()
-            // No horizontal padding — highlight bleeds flush to the left edge
             .onFocusChanged { isFocused = it.isFocused }
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(
-                    if (highlightBrush != null)
-                        Modifier.background(highlightBrush, highlightShape)
-                    else Modifier
-                )
+                .then(activeBackground)
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
