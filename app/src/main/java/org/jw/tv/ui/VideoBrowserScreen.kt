@@ -214,8 +214,7 @@ fun VideoBrowserScreen(
                                     )
                                     TvLazyRow(
                                         horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                        pivotOffsets = androidx.tv.foundation.PivotOffsets(parentFraction = 0.08f),
-                                        modifier = Modifier.focusRestorer()
+                                        pivotOffsets = androidx.tv.foundation.PivotOffsets(parentFraction = 0.08f)
                                     ) {
                                         items(
                                             items = viewModel.continueWatchingList,
@@ -281,8 +280,7 @@ fun VideoBrowserScreen(
                                     )
                                     TvLazyRow(
                                         horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                        pivotOffsets = androidx.tv.foundation.PivotOffsets(parentFraction = 0.08f),
-                                        modifier = Modifier.focusRestorer()
+                                        pivotOffsets = androidx.tv.foundation.PivotOffsets(parentFraction = 0.08f)
                                     ) {
                                         items(
                                             items = subcat.videos,

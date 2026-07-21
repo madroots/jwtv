@@ -266,11 +266,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun loadCachedSubcategories(
         category: CategoryData,
         langCode: String
-    ): List<SubcategoryWithMedia> {
+    ): List<SubcategoryWithMedia> = withContext(Dispatchers.IO) {
         val cached = MediatorClient.getCachedCategory(category.key, langCode)
-            ?: return emptyList()
+            ?: return@withContext emptyList()
         val subcats = cached.category.subcategories
-        return if (!subcats.isNullOrEmpty()) {
+        if (!subcats.isNullOrEmpty()) {
             subcats.mapNotNull { sub ->
                 val subCached = MediatorClient.getCachedCategory(sub.key, langCode)
                 val videos = subCached?.category?.media ?: emptyList()
