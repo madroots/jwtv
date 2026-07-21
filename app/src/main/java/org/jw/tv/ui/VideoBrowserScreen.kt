@@ -1095,6 +1095,7 @@ fun LanguageSelectionDialog(
     // Focus: search field starts focused; DPAD_DOWN jumps to the first language
     // row (TextField would otherwise swallow directional input).
     val firstLangFocus = remember { FocusRequester() }
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1125,12 +1126,17 @@ fun LanguageSelectionDialog(
                         .fillMaxWidth()
                         .onKeyEvent { event ->
                             // TextField swallows DPAD_DOWN; intercept it and move
-                            // focus deterministically to the first language row.
-                            if (event.type == KeyEventType.KeyDown &&
-                                (event.key == Key.DirectionDown || event.key == Key.DirectionRight)
-                            ) {
-                                try { firstLangFocus.requestFocus() } catch (e: Exception) {}
-                                true
+                            // focus to the first language row. Falls back to the
+                            // focus manager if the requester isn't attached (e.g.
+                            // the Popular section is empty).
+                            if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
+                                val moved = try {
+                                    firstLangFocus.requestFocus()
+                                    true
+                                } catch (e: Exception) {
+                                    focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)
+                                }
+                                moved
                             } else false
                         },
                     colors = TextFieldDefaults.colors(
@@ -1182,7 +1188,7 @@ fun LanguageSelectionDialog(
                     itemsIndexed(filtered, key = { _, l -> "all_${l.code}" }) { idx, lang ->
                         LangRow(
                             label = "${lang.vernacular} (${lang.name})",
-                            focusRequester = if (searchQuery.isNotEmpty() && idx == 0) firstLangFocus else null
+                            focusRequester = if (idx == 0 && (searchQuery.isNotEmpty() || popular.isEmpty())) firstLangFocus else null
                         ) {
                             viewModel.changeLanguage(lang.code, lang.vernacular)
                             onDismiss()
