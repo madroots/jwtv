@@ -299,23 +299,22 @@ fun VideoBrowserScreen(
             }
         }
 
-        // ── Sidebar (Animated Width — icons & highlights perfectly contained) ────────
         // ── Sidebar ───────────────────────────────────────────────────────────
-        // Gradient: solid dark through the entire text/icon region, then fades
-        // to transparent at the right edge so the content behind shows through.
+        // Collapsed: fully transparent — hero section gradient handles icon legibility.
+        // Expanded:  smooth horizontal gradient, dark left edge → transparent right edge.
         Column(
             modifier = Modifier
                 .width(sidebarWidth)
                 .fillMaxHeight()
                 .zIndex(30f)
-                .background(
-                    Brush.horizontalGradient(
-                        colorStops = arrayOf(
-                            0.00f to if (sidebarExpanded) Color(0xFF020305) else Color(0xF00D1117),
-                            0.92f to if (sidebarExpanded) Color(0xFF020305) else Color(0xF00D1117),
-                            1.00f to Color.Transparent
+                .then(
+                    if (sidebarExpanded)
+                        Modifier.background(
+                            Brush.horizontalGradient(
+                                colors = listOf(Color(0xFF0B0F19), Color.Transparent)
+                            )
                         )
-                    )
+                    else Modifier  // collapsed: no background at all
                 )
                 .onFocusChanged { sidebarExpanded = it.hasFocus }
                 .padding(vertical = 24.dp)
@@ -639,34 +638,29 @@ private fun SidebarItem(
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
-    // Gradient stop: red is fully opaque through the icon area (~54dp = 8dp padding
-    // + 16dp row-padding + 22dp icon + some breathing room), then fades to
-    // transparent well before the background gradient does, so the bleed reads
-    // as the item "dissolving" into the dark sidebar.
+    // Left-anchored red gradient: fully opaque red on the left edge, fading to
+    // completely transparent on the right. Left corners rounded, right edge is
+    // the natural gradient dissolve — no hard border.
+    // Active in BOTH collapsed (icon-only) and expanded states.
     val highlightBrush = remember(isFocused, selected) {
         when {
             isFocused -> Brush.horizontalGradient(
-                colorStops = arrayOf(
-                    0.00f to Color(0xCCE50914),
-                    0.45f to Color(0x88E50914),
-                    0.68f to Color.Transparent
-                )
+                colors = listOf(Color(0xFFFF0033), Color(0x00FF0033))
             )
             selected -> Brush.horizontalGradient(
-                colorStops = arrayOf(
-                    0.00f to Color(0x99E50914),
-                    0.40f to Color(0x44E50914),
-                    0.68f to Color.Transparent
-                )
+                colors = listOf(Color(0xAAFF0033), Color(0x00FF0033))
             )
             else -> null
         }
     }
+    // Left corners rounded (12dp), right corners = 0 so the gradient dissolves
+    // flush against the content — no visible rounded corner on the fading edge.
+    val highlightShape = RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp)
 
     Surface(
         onClick = onClick,
         colors = ClickableSurfaceDefaults.colors(
-            containerColor    = Color.Transparent,
+            containerColor        = Color.Transparent,
             focusedContainerColor = Color.Transparent,
             pressedContainerColor = Color.Transparent
         ),
@@ -674,7 +668,7 @@ private fun SidebarItem(
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp)
+            // No horizontal padding — highlight bleeds flush to the left edge
             .onFocusChanged { isFocused = it.isFocused }
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
     ) {
@@ -682,7 +676,8 @@ private fun SidebarItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(
-                    if (highlightBrush != null) Modifier.background(highlightBrush, RoundedCornerShape(8.dp))
+                    if (highlightBrush != null)
+                        Modifier.background(highlightBrush, highlightShape)
                     else Modifier
                 )
                 .padding(horizontal = 16.dp, vertical = 10.dp),
