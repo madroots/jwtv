@@ -298,12 +298,22 @@ fun VideoBrowserScreen(
                 }
             }
         }
+        // ── Scrim overlay: darkens the main content behind the expanded sidebar ──
+        if (sidebarExpanded) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.7f))
+                    .zIndex(15f)
+            )
+        }
+
 
         // ── Sidebar ───────────────────────────────────────────────────────────
-        // Collapsed: fully transparent — hero section gradient handles icon legibility.
-        // Expanded:  multi-stop gradient that holds near-solid opacity through
-        // the text/icon zone (0-60%) and only fades completely at the far right
-        // edge, so content behind never bleeds through behind the menu labels.
+        // Collapsed: fully transparent.
+        // Expanded:  scrim dims content, sidebar draws with its own dark→transparent
+        // gradient layered on top.  The gradient uses 0xA0C12 at varying opacities
+        // so the dark left edge blocks all content, fades only at the far right.
         Column(
             modifier = Modifier
                 .width(sidebarWidth)
@@ -313,15 +323,14 @@ fun VideoBrowserScreen(
                     if (sidebarExpanded)
                         Modifier.background(
                             Brush.horizontalGradient(
-                                colorStops = arrayOf(
-                                    0.00f to Color(0xFA0B0F19),   // 0.98 — near solid
-                                    0.30f to Color(0xE60B0F19),   // 0.90 — high opacity behind text
-                                    0.60f to Color(0xB30B0F19),   // 0.70 — moderate opacity
-                                    1.00f to Color.Transparent     // dissolve at far edge
+                                colors = listOf(
+                                    Color(0xFF0A0C12),                               // solid dark left
+                                    Color(0xFF0A0C12).copy(alpha = 0.95f),            // near-solid behind text
+                                    Color.Transparent                                  // fades at right edge
                                 )
                             )
                         )
-                    else Modifier  // collapsed: no background at all
+                    else Modifier
                 )
                 .onFocusChanged { sidebarExpanded = it.hasFocus }
                 .padding(vertical = 24.dp)
@@ -645,17 +654,23 @@ private fun SidebarItem(
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
-    // Left-anchored red gradient: fully opaque red on the left edge, fading to
-    // completely transparent on the right. Left corners rounded, right edge is
-    // the natural gradient dissolve — no hard border.
-    // Active in BOTH collapsed (icon-only) and expanded states.
+    // Red highlight pill: opaque red on left → 20% red → transparent dissolves
+    // into the sidebar background.  Active in BOTH collapsed and expanded states.
     val highlightBrush = remember(isFocused, selected) {
         when {
             isFocused -> Brush.horizontalGradient(
-                colors = listOf(Color(0xFFFF0033), Color(0x00FF0033))
+                colors = listOf(
+                    Color(0xFFFF0033),
+                    Color(0xFFFF0033).copy(alpha = 0.2f),
+                    Color.Transparent
+                )
             )
             selected -> Brush.horizontalGradient(
-                colors = listOf(Color(0xAAFF0033), Color(0x00FF0033))
+                colors = listOf(
+                    Color(0xAAFF0033),
+                    Color(0xAAFF0033).copy(alpha = 0.15f),
+                    Color.Transparent
+                )
             )
             else -> null
         }
