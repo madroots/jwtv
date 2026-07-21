@@ -45,7 +45,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -62,7 +61,6 @@ import androidx.tv.foundation.lazy.list.TvLazyColumn
 import androidx.tv.foundation.lazy.list.TvLazyRow
 import androidx.tv.foundation.lazy.list.items
 import androidx.tv.material3.*
-import coil.compose.SubcomposeAsyncImage
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import kotlinx.coroutines.Job
@@ -98,13 +96,16 @@ fun VideoBrowserScreen(
 
     val listState = rememberLazyListState()
     val currentCategoryKey = viewModel.currentCategory?.key
+    val isHome = viewModel.currentCategory == null || viewModel.currentCategory?.key == "VideoOnDemand"
 
-    // Initial focus on app launch / category change: land directly on Hero's "Play Now" button!
+    // Initial focus: land on Hero's "Play Now" button ONLY when on Home screen!
     LaunchedEffect(currentCategoryKey, viewModel.uiState) {
         if (viewModel.uiState is UiState.Success) {
             delay(100)
             try {
-                heroPlayFocusRequester.requestFocus()
+                if (isHome && viewModel.featuredVideo != null) {
+                    heroPlayFocusRequester.requestFocus()
+                }
                 listState.scrollToItem(0, 0)
             } catch (e: Exception) {}
         }
@@ -130,7 +131,7 @@ fun VideoBrowserScreen(
         scrollJob = coroutineScope.launch {
             try {
                 if (rowIndex <= 1) {
-                    listState.scrollToItem(0, 0)
+                    listState.scrollToItem(0, 0) // instant 0ms snap to top
                 } else {
                     listState.animateScrollToItem(rowIndex, -100)
                 }
@@ -178,9 +179,8 @@ fun VideoBrowserScreen(
                     is UiState.Success -> {
                         var tvColumnItemCounter = 0
 
-                        // Row 0: Featured Hero Banner
-                        val featured = viewModel.featuredVideo
-                            ?: viewModel.subcategoriesWithMedia.firstOrNull()?.videos?.firstOrNull()
+                        // Featured Hero Banner: ONLY on Home screen!
+                        val featured = if (isHome) viewModel.featuredVideo else null
                         if (featured != null) {
                             val heroIndex = tvColumnItemCounter++
                             item(key = "hero_banner") {
@@ -193,16 +193,20 @@ fun VideoBrowserScreen(
                             }
                         }
 
-                        // Row 1 (or 0 if no hero): Continue Watching Row
-                        val isHome = viewModel.currentCategory == null || viewModel.currentCategory?.key == "VideoOnDemand"
+                        // Continue Watching Row (Home screen only)
                         if (isHome && viewModel.continueWatchingList.isNotEmpty()) {
                             val continueIndex = tvColumnItemCounter++
+                            val isFirstRowBelowHero = featured != null && continueIndex == 1
                             item(key = "continue_watching_row") {
                                 Column(
                                     Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 24.dp, vertical = 12.dp)
-                                        .focusProperties { up = heroPlayFocusRequester }
+                                        .then(
+                                            if (isFirstRowBelowHero) {
+                                                Modifier.focusProperties { up = heroPlayFocusRequester }
+                                            } else Modifier
+                                        )
                                         .onFocusChanged { if (it.hasFocus) handleRowFocus(continueIndex) }
                                 ) {
                                     Text(
@@ -258,14 +262,14 @@ fun VideoBrowserScreen(
                                 key = { _, subcat -> subcat.key }
                             ) { idx, subcat ->
                                 val rowItemIndex = baseSubcatIndex + idx
-                                val isFirstVideoRow = rowItemIndex == 1
+                                val isFirstRowBelowHero = featured != null && rowItemIndex == 1
 
                                 Column(
                                     Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 24.dp, vertical = 12.dp)
                                         .then(
-                                            if (isFirstVideoRow) {
+                                            if (isFirstRowBelowHero) {
                                                 Modifier.focusProperties { up = heroPlayFocusRequester }
                                             } else Modifier
                                         )
@@ -343,8 +347,6 @@ fun VideoBrowserScreen(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 item(key = "nav_home") {
-                    val isHome = viewModel.currentCategory == null ||
-                            viewModel.currentCategory?.key == "VideoOnDemand"
                     SidebarItem(
                         icon = Icons.Filled.Home,
                         label = "Home",
@@ -517,7 +519,7 @@ fun VideoBrowserScreen(
     }
 }
 
-// ── Continue Watching Card (ZERO Scale, 2dp White Border on Focus) ───────────
+// ── Continue Watching Card ───────────────────────────────────────────────────
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -539,7 +541,6 @@ fun ContinueWatchingCard(
         (progress.positionMs.toFloat() / progress.durationMs.toFloat()).coerceIn(0f, 1f)
     } else 0f
 
-    // Explicit scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f) forces ZERO scaling/zoom!
     Surface(
         onClick = onClick,
         colors = ClickableSurfaceDefaults.colors(
@@ -637,7 +638,7 @@ private fun SidebarItem(
     }
 }
 
-// ── Hero banner (Button focusedScale = 1.0f) ──────────────────────────────────
+// ── Hero banner ──────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -741,7 +742,7 @@ fun HeroBanner(
     }
 }
 
-// ── Video card (ZERO Scale, 2dp White Border on Focus) ───────────────────────
+// ── Video card ───────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -759,7 +760,6 @@ fun VideoCard(
             .build()
     }
 
-    // Explicit scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f) forces ZERO scaling/zoom!
     Surface(
         onClick = onClick,
         colors = ClickableSurfaceDefaults.colors(
