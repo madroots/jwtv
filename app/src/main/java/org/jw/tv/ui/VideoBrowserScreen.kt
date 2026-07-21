@@ -13,9 +13,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Accessibility
@@ -60,10 +57,11 @@ import androidx.compose.ui.zIndex
 import androidx.tv.foundation.lazy.list.TvLazyColumn
 import androidx.tv.foundation.lazy.list.TvLazyRow
 import androidx.tv.foundation.lazy.list.items
+import androidx.tv.foundation.lazy.list.itemsIndexed
+import androidx.tv.foundation.lazy.list.rememberTvLazyListState
 import androidx.tv.material3.*
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jw.tv.BuildConfig
@@ -94,7 +92,9 @@ fun VideoBrowserScreen(
     val sidebarFirstFocus = remember { FocusRequester() }
     val heroPlayFocusRequester = remember { FocusRequester() }
 
-    val listState = rememberLazyListState()
+    // TvLazyColumn natively scrolls the focused row into view with one
+    // canonical animation in BOTH directions — no hand-rolled focus scrolling.
+    val listState = rememberTvLazyListState()
     val currentCategoryKey = viewModel.currentCategory?.key
     val isHome = viewModel.currentCategory == null || viewModel.currentCategory?.key == "VideoOnDemand"
 
@@ -127,24 +127,6 @@ fun VideoBrowserScreen(
         } catch (e: Exception) { 1 }
     }
 
-    var scrollJob by remember { mutableStateOf<Job?>(null) }
-
-    // Butter-smooth row focus handler:
-    // - Row 0 (Hero) & Row 1 (1st video row): smooth animateScrollToItem(0, 0)
-    // - Row >= 2 (2nd row+): smooth animateScrollToItem(rowIndex, -100)
-    fun handleRowFocus(rowIndex: Int) {
-        scrollJob?.cancel()
-        scrollJob = coroutineScope.launch {
-            try {
-                if (rowIndex <= 1) {
-                    listState.animateScrollToItem(0, 0)
-                } else {
-                    listState.animateScrollToItem(rowIndex, -100)
-                }
-            } catch (e: Exception) {}
-        }
-    }
-
     Box(modifier = modifier.fillMaxSize().background(Color(0xFF090B0E))) {
 
         // ── Main content (fixed 70dp inset) ──────────────────────────────────
@@ -153,7 +135,7 @@ fun VideoBrowserScreen(
                 .fillMaxSize()
                 .padding(start = SIDEBAR_ICON_DP)
         ) {
-            LazyColumn(
+            TvLazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize()
             ) {
@@ -187,13 +169,12 @@ fun VideoBrowserScreen(
 
                         // Row 0: Featured Hero Banner (rendered whenever featured != null)
                         if (featured != null) {
-                            val heroIndex = tvColumnItemCounter++
+                            tvColumnItemCounter++
                             item(key = "hero_banner") {
                                 HeroBanner(
                                     video = featured,
                                     playButtonFocusRequester = heroPlayFocusRequester,
-                                    onPlay = { selectedVideoForDetails = featured },
-                                    onFocused = { handleRowFocus(heroIndex) }
+                                    onPlay = { selectedVideoForDetails = featured }
                                 )
                             }
                         }
@@ -212,7 +193,6 @@ fun VideoBrowserScreen(
                                                 Modifier.focusProperties { up = heroPlayFocusRequester }
                                             } else Modifier
                                         )
-                                        .onFocusChanged { if (it.hasFocus) handleRowFocus(continueIndex) }
                                 ) {
                                     Text(
                                         text = "Continue Watching",
@@ -278,7 +258,6 @@ fun VideoBrowserScreen(
                                                 Modifier.focusProperties { up = heroPlayFocusRequester }
                                             } else Modifier
                                         )
-                                        .onFocusChanged { if (it.hasFocus) handleRowFocus(rowItemIndex) }
                                 ) {
                                     Text(
                                         text = subcat.name,
@@ -654,14 +633,12 @@ fun HeroBanner(
     video: MediaItem,
     playButtonFocusRequester: FocusRequester,
     onPlay: () -> Unit,
-    onFocused: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(310.dp)
-            .onFocusChanged { if (it.hasFocus) onFocused() }
     ) {
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)

@@ -17,16 +17,8 @@ class JwTvApp : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
-        // Bug 4: Catch transient uncaught UI exceptions during rapid D-pad input
-        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            try {
-                throwable.printStackTrace()
-            } catch (e: Exception) {
-                defaultHandler?.uncaughtException(thread, throwable)
-            }
-        }
-
+        // No custom UncaughtExceptionHandler: swallowing main-thread exceptions
+        // kills the Looper but keeps the process alive → frozen zombie app.
         MediatorClient.init(this)
     }
 
