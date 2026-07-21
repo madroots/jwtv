@@ -310,11 +310,9 @@ fun VideoBrowserScreen(
                 .zIndex(30f)
                 .background(
                     Brush.horizontalGradient(
-                        // Hold solid black through icon+label+breathing room (92%),
-                        // then dissolve over the final 8% into the main content.
                         colorStops = arrayOf(
-                            0.00f to Color(0xFF020305),
-                            0.92f to Color(0xFF020305),
+                            0.00f to if (sidebarExpanded) Color(0xFF020305) else Color(0xF00D1117),
+                            0.92f to if (sidebarExpanded) Color(0xFF020305) else Color(0xF00D1117),
                             1.00f to Color.Transparent
                         )
                     )
@@ -650,15 +648,15 @@ private fun SidebarItem(
             isFocused -> Brush.horizontalGradient(
                 colorStops = arrayOf(
                     0.00f to Color(0xCCE50914),
-                    0.55f to Color(0x88E50914),
-                    1.00f to Color.Transparent
+                    0.45f to Color(0x88E50914),
+                    0.68f to Color.Transparent
                 )
             )
             selected -> Brush.horizontalGradient(
                 colorStops = arrayOf(
                     0.00f to Color(0x99E50914),
-                    0.50f to Color(0x44E50914),
-                    1.00f to Color.Transparent
+                    0.40f to Color(0x44E50914),
+                    0.68f to Color.Transparent
                 )
             )
             else -> null
