@@ -44,6 +44,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -1118,7 +1123,16 @@ fun LanguageSelectionDialog(
                     placeholder = { Text("Search...", color = Color.Gray) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .focusProperties { down = firstLangFocus },
+                        .onKeyEvent { event ->
+                            // TextField swallows DPAD_DOWN; intercept it and move
+                            // focus deterministically to the first language row.
+                            if (event.type == KeyEventType.KeyDown &&
+                                (event.key == Key.DirectionDown || event.key == Key.DirectionRight)
+                            ) {
+                                try { firstLangFocus.requestFocus() } catch (e: Exception) {}
+                                true
+                            } else false
+                        },
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color(0xFF2B2B2B),
                         unfocusedContainerColor = Color(0xFF1E1E1E),
