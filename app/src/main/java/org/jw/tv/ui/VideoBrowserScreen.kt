@@ -98,12 +98,15 @@ fun VideoBrowserScreen(
     val currentCategoryKey = viewModel.currentCategory?.key
     val isHome = viewModel.currentCategory == null || viewModel.currentCategory?.key == "VideoOnDemand"
 
-    // Initial focus: land on Hero's "Play Now" button ONLY when on Home screen!
+    // Featured video from API (available on Home screen & when root response is loaded)
+    val featured = viewModel.featuredVideo ?: viewModel.subcategoriesWithMedia.firstOrNull()?.videos?.firstOrNull()
+
+    // Initial focus: land on Hero's "Play Now" button when content loads!
     LaunchedEffect(currentCategoryKey, viewModel.uiState) {
         if (viewModel.uiState is UiState.Success) {
             delay(100)
             try {
-                if (isHome && viewModel.featuredVideo != null) {
+                if (featured != null) {
                     heroPlayFocusRequester.requestFocus()
                 }
                 listState.animateScrollToItem(0, 0)
@@ -134,7 +137,7 @@ fun VideoBrowserScreen(
         scrollJob = coroutineScope.launch {
             try {
                 if (rowIndex <= 1) {
-                    listState.animateScrollToItem(0, 0) // butter-smooth animated scroll back to top!
+                    listState.animateScrollToItem(0, 0)
                 } else {
                     listState.animateScrollToItem(rowIndex, -100)
                 }
@@ -182,8 +185,7 @@ fun VideoBrowserScreen(
                     is UiState.Success -> {
                         var tvColumnItemCounter = 0
 
-                        // Featured Hero Banner: ONLY on Home screen!
-                        val featured = if (isHome) viewModel.featuredVideo else null
+                        // Row 0: Featured Hero Banner (rendered whenever featured != null)
                         if (featured != null) {
                             val heroIndex = tvColumnItemCounter++
                             item(key = "hero_banner") {
@@ -196,7 +198,7 @@ fun VideoBrowserScreen(
                             }
                         }
 
-                        // Continue Watching Row (Home screen only)
+                        // Row 1 (or 0 if no hero): Continue Watching Row (Home screen only)
                         if (isHome && viewModel.continueWatchingList.isNotEmpty()) {
                             val continueIndex = tvColumnItemCounter++
                             val isFirstRowBelowHero = featured != null && continueIndex == 1
@@ -395,11 +397,11 @@ fun VideoBrowserScreen(
                 }
             }
 
-            // Bottom: Language + Update + version string
+            // Bottom: Language + Update + version string (padding 4dp so icons are 100% visible)
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 SidebarItem(
