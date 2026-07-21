@@ -310,11 +310,11 @@ fun VideoBrowserScreen(
                 .zIndex(30f)
                 .background(
                     Brush.horizontalGradient(
-                        // 0.82 = stay fully opaque through the icon+label area,
-                        // then dissolve over the remaining ~18% of the sidebar width.
+                        // Hold solid black through icon+label+breathing room (92%),
+                        // then dissolve over the final 8% into the main content.
                         colorStops = arrayOf(
-                            0.00f to Color(0xF5080A0D),
-                            0.82f to Color(0xF0080A0D),
+                            0.00f to Color(0xFF020305),
+                            0.92f to Color(0xFF020305),
                             1.00f to Color.Transparent
                         )
                     )
