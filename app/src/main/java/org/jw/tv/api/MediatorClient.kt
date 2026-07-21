@@ -27,6 +27,10 @@ object MediatorClient {
             val cacheDir = File(context.cacheDir, "http_cache")
             client = OkHttpClient.Builder()
                 .cache(Cache(cacheDir, 100L * 1024L * 1024L))
+                .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+                .writeTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+                .callTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
                 .build()
             CacheManager.init(context)
             isInitialized = true

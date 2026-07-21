@@ -232,35 +232,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (response != null) {
                 val subcats = response.category.subcategories
                 if (!subcats.isNullOrEmpty()) {
-                    // Reset to empty so we stream results in as they arrive.
-                    val results = mutableListOf<SubcategoryWithMedia>()
-                    val mutex = Mutex()
-
-                    // Cap to 3 concurrent HTTP calls to avoid saturating the stack.
-                    val ioLimited = Dispatchers.IO.limitedParallelism(3)
-                    val deferred = subcats.map { sub ->
+                    val ioLimited = Dispatchers.IO.limitedParallelism(4)
+                    val fresh = subcats.map { sub ->
                         async(ioLimited) {
                             val subResp = MediatorClient.fetchCategory(sub.key, selectedLanguageCode)
                             val videos = subResp?.category?.media ?: emptyList()
-                            if (videos.isNotEmpty()) {
-                                val item = SubcategoryWithMedia(sub.name, sub.key, videos)
-                                // BUG-5: emit each row as it resolves so the UI
-                                // shows content progressively instead of all at once.
-                                mutex.withLock {
-                                    results.add(item)
-                                    subcategoriesWithMedia = results.toList()
-                                    uiState = UiState.Success
-                                }
-                            }
+                            if (videos.isNotEmpty()) SubcategoryWithMedia(sub.name, sub.key, videos)
+                            else null
                         }
+                    }.awaitAll().filterNotNull()
+
+                    if (fresh.isNotEmpty()) {
+                        subcategoriesWithMedia = fresh
+                        uiState = UiState.Success
                     }
-                    awaitAll(*deferred.toTypedArray())
-                    // Final authoritative ordering: match the server's row order.
-                    val ordered = subcats.mapNotNull { sub ->
-                        results.find { it.key == sub.key }
-                    }
-                    if (ordered.isNotEmpty()) subcategoriesWithMedia = ordered
-                    uiState = UiState.Success
                 } else {
                     val videos = response.category.media ?: emptyList()
                     subcategoriesWithMedia = if (videos.isNotEmpty()) {

@@ -63,6 +63,7 @@ import androidx.tv.foundation.lazy.list.TvLazyRow
 import androidx.tv.foundation.lazy.list.items
 import androidx.tv.material3.*
 import coil.compose.SubcomposeAsyncImage
+import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -561,12 +562,11 @@ fun ContinueWatchingCard(
     ) {
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                SubcomposeAsyncImage(
+                AsyncImage(
                     model = imageRequest,
                     contentDescription = progress.title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    loading = { ShimmerBox(Modifier.fillMaxSize()) }
+                    modifier = Modifier.fillMaxSize().background(Color(0xFF1A1F27)),
+                    contentScale = ContentScale.Crop
                 )
                 LinearProgressIndicator(
                     progress = { progressFraction },
@@ -656,15 +656,14 @@ fun HeroBanner(
             .height(310.dp)
             .onFocusChanged { if (it.hasFocus) onFocused() }
     ) {
-        SubcomposeAsyncImage(
+        AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(video.getThumbnailUrl())
                 .size(1280, 720)
                 .build(),
             contentDescription = video.title,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-            loading = { ShimmerBox(Modifier.fillMaxSize()) }
+            modifier = Modifier.fillMaxSize().background(Color(0xFF1A1F27)),
+            contentScale = ContentScale.Crop
         )
         Box(
             Modifier.fillMaxSize().background(
@@ -783,12 +782,11 @@ fun VideoCard(
     ) {
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                SubcomposeAsyncImage(
+                AsyncImage(
                     model = imageRequest,
                     contentDescription = video.title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    loading = { ShimmerBox(Modifier.fillMaxSize()) }
+                    modifier = Modifier.fillMaxSize().background(Color(0xFF1A1F27)),
+                    contentScale = ContentScale.Crop
                 )
                 val dur = formatDuration(video.duration)
                 if (dur.isNotEmpty()) {
@@ -819,41 +817,6 @@ fun VideoCard(
                 )
             }
         }
-    }
-}
-
-// ── Shimmer placeholder ──────────────────────────────────────────────────────
-
-@Composable
-fun ShimmerBox(modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val offset by transition.animateFloat(
-        initialValue = -1f,
-        targetValue = 2f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shimmerOffset"
-    )
-    BoxWithConstraints(modifier) {
-        val w = constraints.maxWidth.toFloat()
-        val h = constraints.maxHeight.toFloat()
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFF1A1F27),
-                            Color(0xFF2A3140),
-                            Color(0xFF1A1F27)
-                        ),
-                        start = Offset(offset * w, 0f),
-                        end   = Offset((offset + 1f) * w, h)
-                    )
-                )
-        )
     }
 }
 
@@ -900,15 +863,14 @@ fun VideoDetailsDialog(
         ) {
             Row(modifier = Modifier.fillMaxSize()) {
                 Box(modifier = Modifier.weight(0.45f).fillMaxHeight()) {
-                    SubcomposeAsyncImage(
+                    AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(video.getThumbnailUrl())
                             .size(640, 360)
                             .build(),
                         contentDescription = video.title,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        loading = { ShimmerBox(Modifier.fillMaxSize()) }
+                        modifier = Modifier.fillMaxSize().background(Color(0xFF1A1F27)),
+                        contentScale = ContentScale.Crop
                     )
                     Box(
                         Modifier.fillMaxSize().background(
