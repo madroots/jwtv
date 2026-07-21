@@ -1,5 +1,6 @@
 package org.jw.tv.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -838,6 +839,11 @@ fun VideoDetailsDialog(
     LaunchedEffect(Unit) {
         try { playButtonFocusRequester.requestFocus() } catch (e: Exception) {}
     }
+
+    // TV BACK dismisses the dialog instead of falling through to the NavHost
+    // (browser is the start destination, so unhandled BACK finishes the Activity
+    // and looks like a crash).
+    BackHandler { onDismiss() }
 
     Box(
         modifier = Modifier
