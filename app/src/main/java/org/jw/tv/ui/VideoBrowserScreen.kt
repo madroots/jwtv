@@ -301,11 +301,11 @@ fun VideoBrowserScreen(
                 .onFocusChanged { sidebarExpanded = it.hasFocus }
                 .padding(vertical = 24.dp)
         ) {
-            // Brand logo
+            // Brand logo (icon at 24dp — identical alignment to sidebar item icons)
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 androidx.compose.material3.Icon(
@@ -379,11 +379,12 @@ fun VideoBrowserScreen(
                 }
             }
 
-            // Bottom: Language + Update + version string (padding 4dp so icons are 100% visible)
+            // Bottom: Language + Update + version string (no extra padding —
+            // SidebarItem's own 8dp+16dp puts icons at 24dp, same as nav icons)
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                    .padding(vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 SidebarItem(
@@ -1086,37 +1087,56 @@ fun LanguageSelectionDialog(
         }
     }
 
-    AlertDialog(
+    // Focus: search field starts focused; DPAD_DOWN jumps to the first language
+    // row (TextField would otherwise swallow directional input).
+    val firstLangFocus = remember { FocusRequester() }
+
+    Dialog(
         onDismissRequest = onDismiss,
-        title = {
-            Text(
-                "Select Language",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-        },
-        text = {
-            Column(Modifier.fillMaxWidth().height(380.dp)) {
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false
+        )
+    ) {
+        androidx.compose.material3.Surface(
+            color = Color(0xFF1E1E1E),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.width(560.dp).height(520.dp)
+        ) {
+            Column(Modifier.fillMaxSize().padding(20.dp)) {
+                Text(
+                    "Select Language",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(Modifier.height(12.dp))
                 TextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     placeholder = { Text("Search...", color = Color.Gray) },
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusProperties { down = firstLangFocus },
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color(0xFF2B2B2B),
                         unfocusedContainerColor = Color(0xFF1E1E1E),
                         focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
+                        unfocusedTextColor = Color.White,
+                        cursorColor = Color.White,
+                        focusedIndicatorColor = Color(0xFFE50914),
+                        unfocusedIndicatorColor = Color(0xFF5A6B7C)
                     ),
                     singleLine = true
                 )
+                Spacer(Modifier.height(12.dp))
                 TvLazyColumn(
                     Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     if (searchQuery.isEmpty()) {
-                        item {
+                        item(key = "header_popular") {
                             Text(
                                 "Popular",
                                 fontSize = 12.sp,
@@ -1125,13 +1145,16 @@ fun LanguageSelectionDialog(
                                 modifier = Modifier.padding(vertical = 4.dp)
                             )
                         }
-                        items(popular) { lang ->
-                            LangRow("${lang.vernacular} (${lang.name})") {
+                        itemsIndexed(popular, key = { _, l -> "pop_${l.code}" }) { idx, lang ->
+                            LangRow(
+                                label = "${lang.vernacular} (${lang.name})",
+                                focusRequester = if (idx == 0) firstLangFocus else null
+                            ) {
                                 viewModel.changeLanguage(lang.code, lang.vernacular)
                                 onDismiss()
                             }
                         }
-                        item {
+                        item(key = "header_all") {
                             Spacer(Modifier.height(8.dp))
                             Text(
                                 "All Languages",
@@ -1142,37 +1165,76 @@ fun LanguageSelectionDialog(
                             )
                         }
                     }
-                    items(filtered) { lang ->
-                        LangRow("${lang.vernacular} (${lang.name})") {
+                    itemsIndexed(filtered, key = { _, l -> "all_${l.code}" }) { idx, lang ->
+                        LangRow(
+                            label = "${lang.vernacular} (${lang.name})",
+                            focusRequester = if (searchQuery.isNotEmpty() && idx == 0) firstLangFocus else null
+                        ) {
                             viewModel.changeLanguage(lang.code, lang.vernacular)
                             onDismiss()
                         }
                     }
                 }
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.colors(
+                        contentColor = Color.White,
+                        focusedContentColor = Color.White
+                    ),
+                    scale = ButtonDefaults.scale(focusedScale = 1.0f),
+                    border = ButtonDefaults.border(
+                        border = Border(
+                            border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
+                            shape = RoundedCornerShape(8.dp)
+                        ),
+                        focusedBorder = Border(
+                            border = BorderStroke(2.dp, Color.White),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                    ),
+                    modifier = Modifier.align(Alignment.End)
+                ) { Text("Cancel") }
             }
-        },
-        confirmButton = {},
-        dismissButton = {
-            OutlinedButton(onClick = onDismiss) { Text("Cancel") }
-        },
-        containerColor = Color(0xFF1E1E1E),
-        titleContentColor = Color.White,
-        textContentColor = Color.LightGray
-    )
+        }
+    }
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun LangRow(label: String, onClick: () -> Unit) {
+private fun LangRow(
+    label: String,
+    focusRequester: FocusRequester? = null,
+    onClick: () -> Unit
+) {
     Surface(
         onClick = onClick,
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color(0xFF262626),
-            focusedContainerColor = Color(0xFF333333)
+            contentColor = Color.White,
+            focusedContainerColor = Color(0xFF383838),
+            focusedContentColor = Color.White
         ),
-        modifier = Modifier.fillMaxWidth()
+        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(8.dp)),
+        border = ClickableSurfaceDefaults.border(
+            focusedBorder = Border(
+                border = BorderStroke(2.dp, Color.White),
+                shape = RoundedCornerShape(8.dp)
+            )
+        ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
     ) {
-        Text(label, color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(10.dp))
+        Text(
+            label,
+            color = Color.White,
+            fontSize = 14.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+        )
     }
 }
 
