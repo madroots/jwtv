@@ -301,7 +301,9 @@ fun VideoBrowserScreen(
 
         // ── Sidebar ───────────────────────────────────────────────────────────
         // Collapsed: fully transparent — hero section gradient handles icon legibility.
-        // Expanded:  smooth horizontal gradient, dark left edge → transparent right edge.
+        // Expanded:  multi-stop gradient that holds near-solid opacity through
+        // the text/icon zone (0-60%) and only fades completely at the far right
+        // edge, so content behind never bleeds through behind the menu labels.
         Column(
             modifier = Modifier
                 .width(sidebarWidth)
@@ -311,7 +313,12 @@ fun VideoBrowserScreen(
                     if (sidebarExpanded)
                         Modifier.background(
                             Brush.horizontalGradient(
-                                colors = listOf(Color(0xFF0B0F19), Color.Transparent)
+                                colorStops = arrayOf(
+                                    0.00f to Color(0xFA0B0F19),   // 0.98 — near solid
+                                    0.30f to Color(0xE60B0F19),   // 0.90 — high opacity behind text
+                                    0.60f to Color(0xB30B0F19),   // 0.70 — moderate opacity
+                                    1.00f to Color.Transparent     // dissolve at far edge
+                                )
                             )
                         )
                     else Modifier  // collapsed: no background at all
