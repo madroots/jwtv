@@ -1126,8 +1126,14 @@ fun LanguageSelectionDialog(
                 )
                 Spacer(Modifier.height(12.dp))
                 // Search field — user navigates here with DPAD_UP from the list.
-                // We intercept BACK (clear focus so IME can't re-attach) and
-                // DPAD_DOWN (move focus back into the list).
+                // Intercept DPAD_DOWN only: moves focus into the list below.
+                // BACK is NOT intercepted here — when the keyboard is open the
+                // platform IME handles BACK itself (closes keyboard, keeps focus
+                // on the TextField).  When the keyboard is already closed, BACK
+                // reaches DialogProperties.dismissOnBackPress and closes the
+                // dialog cleanly.  Consuming BACK here would clearFocus() and
+                // leave nothing focused in the dialog, causing DPAD events to
+                // leak through to the content behind the modal.
                 TextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
@@ -1135,20 +1141,10 @@ fun LanguageSelectionDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .onKeyEvent { event ->
-                            if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
-                            when (event.key) {
-                                Key.DirectionDown -> {
-                                    focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)
-                                    true
-                                }
-                                Key.Back -> {
-                                    // Clear focus so the system cannot re-show the IME
-                                    // after the hardware back key dismisses it.
-                                    focusManager.clearFocus()
-                                    true
-                                }
-                                else -> false
-                            }
+                            if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
+                                focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)
+                                true
+                            } else false
                         },
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color(0xFF2B2B2B),
