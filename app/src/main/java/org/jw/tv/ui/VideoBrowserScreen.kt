@@ -1095,6 +1095,7 @@ fun LanguageSelectionDialog(
     }
 
     val searchFocusRequester = remember { FocusRequester() }
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val scrollState = rememberScrollState()
 
     // Request focus on launch to show the keyboard immediately
@@ -1126,10 +1127,15 @@ fun LanguageSelectionDialog(
                 TextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search...", color = Color.Gray) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .focusRequester(searchFocusRequester),
+                        .focusRequester(searchFocusRequester)
+                        .onKeyEvent { event ->
+                            if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
+                                focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)
+                                true
+                            } else false
+                        },
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color(0xFF2B2B2B),
                         unfocusedContainerColor = Color(0xFF1E1E1E),
