@@ -174,7 +174,15 @@ fun VideoBrowserScreen(
                                 HeroBanner(
                                     video = featured,
                                     playButtonFocusRequester = heroPlayFocusRequester,
-                                    onPlay = { selectedVideoForDetails = featured }
+                                    onPlay = { selectedVideoForDetails = featured },
+                                    onPlayFocused = {
+                                        // TvLazyColumn only scrolls far enough to reveal the
+                                        // focused Play button (bottom of the hero). Complete
+                                        // the scroll so the FULL hero is visible.
+                                        coroutineScope.launch {
+                                            try { listState.animateScrollToItem(0, 0) } catch (e: Exception) {}
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -633,6 +641,7 @@ fun HeroBanner(
     video: MediaItem,
     playButtonFocusRequester: FocusRequester,
     onPlay: () -> Unit,
+    onPlayFocused: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -708,6 +717,7 @@ fun HeroBanner(
                 modifier = Modifier
                     .height(44.dp)
                     .focusRequester(playButtonFocusRequester)
+                    .onFocusChanged { if (it.isFocused) onPlayFocused() }
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
