@@ -23,24 +23,22 @@ object UpdateManager {
             .build()
     }
 
-    suspend fun downloadAndInstallApk(
+    // Returns the downloaded File on success, null on failure.
+    suspend fun downloadApk(
         context: Context,
         apkUrl: String,
         onProgress: (Float) -> Unit
-    ): Boolean = withContext(Dispatchers.IO) {
+    ): File? = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder().url(apkUrl).build()
+            val apkFile = File(context.externalCacheDir ?: context.cacheDir, "update.apk")
+            if (apkFile.exists()) apkFile.delete()
+
             downloadClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext false
-                
-                val body = response.body ?: return@withContext false
+                if (!response.isSuccessful) return@withContext null
+                val body = response.body ?: return@withContext null
                 val contentLength = body.contentLength()
-                
-                val apkFile = File(context.externalCacheDir ?: context.cacheDir, "update.apk")
-                if (apkFile.exists()) {
-                    apkFile.delete()
-                }
-                
+
                 body.byteStream().use { input ->
                     FileOutputStream(apkFile).use { output ->
                         val buffer = ByteArray(8192)
@@ -55,17 +53,16 @@ object UpdateManager {
                         }
                     }
                 }
-                
-                installApk(context, apkFile)
-                true
+                // response.use {} closes here — HTTP connection fully released before we return
             }
+            apkFile
         } catch (e: Exception) {
             e.printStackTrace()
-            false
+            null
         }
     }
 
-    private suspend fun installApk(context: Context, apkFile: File) = withContext(Dispatchers.Main) {
+    suspend fun installApk(context: Context, apkFile: File) = withContext(Dispatchers.Main) {
         val intent = Intent(Intent.ACTION_VIEW).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
             val uri: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {

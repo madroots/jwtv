@@ -1094,13 +1094,14 @@ fun LanguageSelectionDialog(
         }
     }
 
-    val searchFocusRequester = remember { FocusRequester() }
-    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
-    val scrollState = rememberScrollState()
+    val focusManager   = androidx.compose.ui.platform.LocalFocusManager.current
+    val scrollState    = rememberScrollState()
+    // Attached to the first visible list row — dialog opens with list focused,
+    // keyboard never auto-opens.  User navigates UP to reach the search field.
+    val firstItemFocus = remember { FocusRequester() }
 
-    // Request focus on launch to show the keyboard immediately
     LaunchedEffect(Unit) {
-        try { searchFocusRequester.requestFocus() } catch (e: Exception) {}
+        try { firstItemFocus.requestFocus() } catch (_: Exception) {}
     }
 
     Dialog(
@@ -1124,17 +1125,30 @@ fun LanguageSelectionDialog(
                     color = Color.White
                 )
                 Spacer(Modifier.height(12.dp))
+                // Search field — user navigates here with DPAD_UP from the list.
+                // We intercept BACK (clear focus so IME can't re-attach) and
+                // DPAD_DOWN (move focus back into the list).
                 TextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
+                    placeholder = { Text("Search...", color = Color.Gray) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .focusRequester(searchFocusRequester)
                         .onKeyEvent { event ->
-                            if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
-                                focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)
-                                true
-                            } else false
+                            if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                            when (event.key) {
+                                Key.DirectionDown -> {
+                                    focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)
+                                    true
+                                }
+                                Key.Back -> {
+                                    // Clear focus so the system cannot re-show the IME
+                                    // after the hardware back key dismisses it.
+                                    focusManager.clearFocus()
+                                    true
+                                }
+                                else -> false
+                            }
                         },
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color(0xFF2B2B2B),
@@ -1162,8 +1176,11 @@ fun LanguageSelectionDialog(
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
-                        popular.forEach { lang ->
-                            LangRow(label = "${lang.vernacular} (${lang.name})") {
+                        popular.forEachIndexed { idx, lang ->
+                            LangRow(
+                                label = "${lang.vernacular} (${lang.name})",
+                                modifier = if (idx == 0) Modifier.focusRequester(firstItemFocus) else Modifier
+                            ) {
                                 viewModel.changeLanguage(lang.code, lang.vernacular)
                                 onDismiss()
                             }
@@ -1177,8 +1194,14 @@ fun LanguageSelectionDialog(
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
                     }
-                    filtered.forEach { lang ->
-                        LangRow(label = "${lang.vernacular} (${lang.name})") {
+                    filtered.forEachIndexed { idx, lang ->
+                        // When search is active (popular section hidden) the first
+                        // filtered row gets the focus requester.
+                        val isFirst = searchQuery.isNotEmpty() && idx == 0
+                        LangRow(
+                            label = "${lang.vernacular} (${lang.name})",
+                            modifier = if (isFirst) Modifier.focusRequester(firstItemFocus) else Modifier
+                        ) {
                             viewModel.changeLanguage(lang.code, lang.vernacular)
                             onDismiss()
                         }

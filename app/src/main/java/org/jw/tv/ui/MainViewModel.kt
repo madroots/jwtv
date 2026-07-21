@@ -12,6 +12,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -146,15 +147,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun startDownload(apkUrl: String, context: Context) {
         isDownloadingUpdate = true
         viewModelScope.launch {
-            val ok = UpdateManager.downloadAndInstallApk(
+            val apkFile = UpdateManager.downloadApk(
                 context, apkUrl,
                 onProgress = { progress -> downloadProgress = progress }
             )
+            // Dismiss the progress overlay FIRST so the Activity is in a clean
+            // foreground state before we fire the install intent.  On some TV
+            // firmware the package-installer intent is silently dropped when a
+            // Dialog/AlertDialog is in front of the Activity window.
             isDownloadingUpdate = false
             downloadProgress = 0f
-            if (!ok) {
+            if (apkFile == null) {
                 updateCheckMessage = "Update download failed. Please try again."
+                return@launch
             }
+            // Small yield so Compose recomposition removes the progress dialog
+            // from the window before startActivity is called.
+            delay(300L)
+            UpdateManager.installApk(context, apkFile)
         }
     }
 
