@@ -300,12 +300,25 @@ fun VideoBrowserScreen(
         }
 
         // ── Sidebar (Animated Width — icons & highlights perfectly contained) ────────
+        // ── Sidebar ───────────────────────────────────────────────────────────
+        // Gradient: solid dark through the entire text/icon region, then fades
+        // to transparent at the right edge so the content behind shows through.
         Column(
             modifier = Modifier
                 .width(sidebarWidth)
                 .fillMaxHeight()
                 .zIndex(30f)
-                .background(Color(0xF00D1117))
+                .background(
+                    Brush.horizontalGradient(
+                        // 0.82 = stay fully opaque through the icon+label area,
+                        // then dissolve over the remaining ~18% of the sidebar width.
+                        colorStops = arrayOf(
+                            0.00f to Color(0xF5080A0D),
+                            0.82f to Color(0xF0080A0D),
+                            1.00f to Color.Transparent
+                        )
+                    )
+                )
                 .onFocusChanged { sidebarExpanded = it.hasFocus }
                 .padding(vertical = 24.dp)
         ) {
@@ -626,34 +639,72 @@ private fun SidebarItem(
     onClick: () -> Unit,
     focusRequester: FocusRequester? = null
 ) {
+    var isFocused by remember { mutableStateOf(false) }
+
+    // Gradient stop: red is fully opaque through the icon area (~54dp = 8dp padding
+    // + 16dp row-padding + 22dp icon + some breathing room), then fades to
+    // transparent well before the background gradient does, so the bleed reads
+    // as the item "dissolving" into the dark sidebar.
+    val highlightBrush = remember(isFocused, selected) {
+        when {
+            isFocused -> Brush.horizontalGradient(
+                colorStops = arrayOf(
+                    0.00f to Color(0xCCE50914),
+                    0.55f to Color(0x88E50914),
+                    1.00f to Color.Transparent
+                )
+            )
+            selected -> Brush.horizontalGradient(
+                colorStops = arrayOf(
+                    0.00f to Color(0x99E50914),
+                    0.50f to Color(0x44E50914),
+                    1.00f to Color.Transparent
+                )
+            )
+            else -> null
+        }
+    }
+
     Surface(
         onClick = onClick,
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (selected) Color(0x22FFFFFF) else Color.Transparent,
-            focusedContainerColor = Color(0x33FFFFFF)
+            containerColor    = Color.Transparent,
+            focusedContainerColor = Color.Transparent,
+            pressedContainerColor = Color.Transparent
         ),
         shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(8.dp)),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp)
+            .onFocusChanged { isFocused = it.isFocused }
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
     ) {
         Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (highlightBrush != null) Modifier.background(highlightBrush, RoundedCornerShape(8.dp))
+                    else Modifier
+                )
+                .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val iconTint = when {
+                isFocused || selected -> Color.White
+                else                  -> Color(0xFF8B949E)
+            }
             androidx.compose.material3.Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (selected) Color.White else Color(0xFF8B949E),
+                tint = iconTint,
                 modifier = Modifier.size(22.dp)
             )
             if (expanded) {
                 Spacer(Modifier.width(14.dp))
                 Text(
                     label,
-                    color = if (selected) Color.White else Color(0xFF8B949E),
+                    color = iconTint,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
