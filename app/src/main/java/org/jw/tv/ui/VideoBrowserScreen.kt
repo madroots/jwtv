@@ -1,6 +1,8 @@
 package org.jw.tv.ui
 
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.*
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -1092,10 +1094,13 @@ fun LanguageSelectionDialog(
         }
     }
 
-    // Focus: search field starts focused; DPAD_DOWN jumps to the first language
-    // row (TextField would otherwise swallow directional input).
-    val firstLangFocus = remember { FocusRequester() }
-    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val searchFocusRequester = remember { FocusRequester() }
+    val scrollState = rememberScrollState()
+
+    // Request focus on launch to show the keyboard immediately
+    LaunchedEffect(Unit) {
+        try { searchFocusRequester.requestFocus() } catch (e: Exception) {}
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1124,21 +1129,7 @@ fun LanguageSelectionDialog(
                     placeholder = { Text("Search...", color = Color.Gray) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .onKeyEvent { event ->
-                            // TextField swallows DPAD_DOWN; intercept it and move
-                            // focus to the first language row. Falls back to the
-                            // focus manager if the requester isn't attached (e.g.
-                            // the Popular section is empty).
-                            if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
-                                val moved = try {
-                                    firstLangFocus.requestFocus()
-                                    true
-                                } catch (e: Exception) {
-                                    focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)
-                                }
-                                moved
-                            } else false
-                        },
+                        .focusRequester(searchFocusRequester),
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color(0xFF2B2B2B),
                         unfocusedContainerColor = Color(0xFF1E1E1E),
@@ -1151,45 +1142,37 @@ fun LanguageSelectionDialog(
                     singleLine = true
                 )
                 Spacer(Modifier.height(12.dp))
-                TvLazyColumn(
-                    Modifier.weight(1f),
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(scrollState),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     if (searchQuery.isEmpty()) {
-                        item(key = "header_popular") {
-                            Text(
-                                "Popular",
-                                fontSize = 12.sp,
-                                color = Color(0xFF8B949E),
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            )
-                        }
-                        itemsIndexed(popular, key = { _, l -> "pop_${l.code}" }) { idx, lang ->
-                            LangRow(
-                                label = "${lang.vernacular} (${lang.name})",
-                                focusRequester = if (idx == 0) firstLangFocus else null
-                            ) {
+                        Text(
+                            "Popular",
+                            fontSize = 12.sp,
+                            color = Color(0xFF8B949E),
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                        popular.forEach { lang ->
+                            LangRow(label = "${lang.vernacular} (${lang.name})") {
                                 viewModel.changeLanguage(lang.code, lang.vernacular)
                                 onDismiss()
                             }
                         }
-                        item(key = "header_all") {
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "All Languages",
-                                fontSize = 12.sp,
-                                color = Color(0xFF8B949E),
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            )
-                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "All Languages",
+                            fontSize = 12.sp,
+                            color = Color(0xFF8B949E),
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
                     }
-                    itemsIndexed(filtered, key = { _, l -> "all_${l.code}" }) { idx, lang ->
-                        LangRow(
-                            label = "${lang.vernacular} (${lang.name})",
-                            focusRequester = if (idx == 0 && (searchQuery.isNotEmpty() || popular.isEmpty())) firstLangFocus else null
-                        ) {
+                    filtered.forEach { lang ->
+                        LangRow(label = "${lang.vernacular} (${lang.name})") {
                             viewModel.changeLanguage(lang.code, lang.vernacular)
                             onDismiss()
                         }
@@ -1224,7 +1207,7 @@ fun LanguageSelectionDialog(
 @Composable
 private fun LangRow(
     label: String,
-    focusRequester: FocusRequester? = null,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     Surface(
@@ -1243,9 +1226,7 @@ private fun LangRow(
             )
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+        modifier = modifier.fillMaxWidth()
     ) {
         Text(
             label,
@@ -1257,7 +1238,6 @@ private fun LangRow(
         )
     }
 }
-
 // ── Utilities ────────────────────────────────────────────────────────────────
 
 fun formatDuration(durationSeconds: Double?): String {
