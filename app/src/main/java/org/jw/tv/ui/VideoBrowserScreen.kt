@@ -100,7 +100,6 @@ fun VideoBrowserScreen(
         label = "sidebarWidth"
     )
 
-    val sidebarFirstFocus = remember { FocusRequester() }
     val heroPlayFocusRequester = remember { FocusRequester() }
 
     // TvLazyColumn natively scrolls the focused row into view with one
@@ -335,17 +334,17 @@ fun VideoBrowserScreen(
                 .onFocusChanged { sidebarExpanded = it.hasFocus }
                 .padding(vertical = 24.dp)
         ) {
-            // Brand logo (icon at 24dp — identical alignment to sidebar item icons)
+            // Brand logo (icon at 16dp — matches SidebarItem inner-row 16dp padding)
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 12.dp),
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 androidx.compose.material3.Icon(
                     imageVector = Icons.Filled.Tv,
                     contentDescription = null,
-                    tint = Color(0xFFE50914),
+                    tint = Color(0xFFFF0033),
                     modifier = Modifier.size(22.dp)
                 )
                 if (sidebarExpanded) {
@@ -367,22 +366,6 @@ fun VideoBrowserScreen(
                 Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                item(key = "nav_home") {
-                    SidebarItem(
-                        icon = Icons.Filled.Home,
-                        label = "Home",
-                        selected = isHome,
-                        expanded = sidebarExpanded,
-                        focusRequester = sidebarFirstFocus,
-                        onClick = {
-                            viewModel.loadRootCategories()
-                            coroutineScope.launch {
-                                try { heroPlayFocusRequester.requestFocus() } catch (e: Exception) {}
-                                listState.animateScrollToItem(0)
-                            }
-                        }
-                    )
-                }
                 item(key = "nav_favorites") {
                     val isFavSelected = viewModel.currentCategory?.key == "FAVORITES"
                     SidebarItem(
@@ -488,9 +471,9 @@ fun VideoBrowserScreen(
                         viewModel.startDownload(viewModel.updateApkUrl)
                     },
                     colors = ButtonDefaults.colors(
-                        containerColor = Color(0xFFE50914),
+                        containerColor = Color(0xFFFF0033),
                         contentColor = Color.White,
-                        focusedContainerColor = Color(0xFFFF1E27),
+                        focusedContainerColor = Color(0xFFFF3355),
                         focusedContentColor = Color.White
                     ),
                     scale = ButtonDefaults.scale(focusedScale = 1.0f),
@@ -618,7 +601,7 @@ fun ContinueWatchingCard(
                 )
                 LinearProgressIndicator(
                     progress = { progressFraction },
-                    color = Color(0xFFE50914),
+                    color = Color(0xFFFF0033),
                     trackColor = Color(0x66000000),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -791,7 +774,7 @@ fun HeroBanner(
         ) {
             Text(
                 "FEATURED VIDEO",
-                color = Color(0xFFE50914),
+                color = Color(0xFFFF0033),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.sp
@@ -815,9 +798,9 @@ fun HeroBanner(
             Button(
                 onClick = onPlay,
                 colors = ButtonDefaults.colors(
-                    containerColor = Color(0xFFE50914),
+                    containerColor = Color(0xFFFF0033),
                     contentColor = Color.White,
-                    focusedContainerColor = Color(0xFFFF1E27),
+                    focusedContainerColor = Color(0xFFFF3355),
                     focusedContentColor = Color.White
                 ),
                 scale = ButtonDefaults.scale(focusedScale = 1.0f),
@@ -1088,9 +1071,9 @@ fun VideoDetailsDialog(
                             Button(
                                 onClick = { onPlay(chosenResolution) },
                                 colors = ButtonDefaults.colors(
-                                    containerColor = Color(0xFFE50914),
+                                    containerColor = Color(0xFFFF0033),
                                     contentColor = Color.White,
-                                    focusedContainerColor = Color(0xFFFF1E27),
+                                    focusedContainerColor = Color(0xFFFF3355),
                                     focusedContentColor = Color.White
                                 ),
                                 scale = ButtonDefaults.scale(focusedScale = 1.0f),
@@ -1232,7 +1215,7 @@ fun LanguageSelectionDialog(
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
                         cursorColor = Color.White,
-                        focusedIndicatorColor = Color(0xFFE50914),
+                        focusedIndicatorColor = Color(0xFFFF0033),
                         unfocusedIndicatorColor = Color(0xFF5A6B7C)
                     ),
                     singleLine = true
