@@ -13,8 +13,8 @@ android {
         applicationId = "org.jw.tv"
         minSdk = 21
         targetSdk = 35
-        versionCode = 49
-        versionName = "3.6.9"
+        versionCode = 50
+        versionName = "3.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
