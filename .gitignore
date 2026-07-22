@@ -10,3 +10,5 @@
 .cxx
 *.apk
 *.aar
+version.txt
+gradle-8.8/
