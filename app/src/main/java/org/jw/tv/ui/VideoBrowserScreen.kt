@@ -461,12 +461,45 @@ fun VideoBrowserScreen(
         }
         AlertDialog(
             onDismissRequest = { viewModel.dismissUpdateDialog() },
-            title = { Text("Update Available", color = Color.White) },
+            title = {
+                Column {
+                    Text("Update Available", color = Color.White)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "v${BuildConfig.VERSION_NAME} → v3.9.1",
+                        color = Color(0xFF8B949E),
+                        fontSize = 13.sp
+                    )
+                }
+            },
             text = {
-                Text(
-                    "A new version of JW TV Library is available. Would you like to update now?",
-                    color = Color.LightGray
-                )
+                Column {
+                    Text(
+                        "A new version is available for download.",
+                        color = Color.LightGray,
+                        fontSize = 14.sp
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "What's new in this update:",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "• Full download support (save videos to device)\n" +
+                        "• Default quality setting\n" +
+                        "• Redesigned Settings menu\n" +
+                        "• Language picker moved to Settings\n" +
+                        "• Simplified sidebar layout\n" +
+                        "• Zero border radius on all elements\n" +
+                        "• Bug fixes & performance improvements",
+                        color = Color(0xFFB0BEC5),
+                        fontSize = 12.sp,
+                        lineHeight = 20.sp
+                    )
+                }
             },
             confirmButton = {
                 Button(
@@ -481,6 +514,7 @@ fun VideoBrowserScreen(
                         focusedContentColor = Color.White
                     ),
                     scale = ButtonDefaults.scale(focusedScale = 1.0f),
+                    shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp)),
                     border = ButtonDefaults.border(
                         focusedBorder = Border(
                             border = BorderStroke(3.dp, Color.White),
@@ -488,7 +522,7 @@ fun VideoBrowserScreen(
                         )
                     ),
                     modifier = Modifier.focusRequester(updateFocusRequester)
-                ) { Text("Update") }
+                ) { Text("Update", fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
                 OutlinedButton(
@@ -497,7 +531,7 @@ fun VideoBrowserScreen(
                         contentColor = Color.White,
                         focusedContentColor = Color.White
                     ),
-                    scale = ButtonDefaults.scale(focusedScale = 1.0f),
+                    shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp)),
                     border = ButtonDefaults.border(
                         focusedBorder = Border(
                             border = BorderStroke(2.dp, Color.White),
