@@ -659,10 +659,12 @@ private fun SidebarItem(
     }
     val highlightShape = RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp)
 
-    // Collapsed: solid red pill with 6dp margin from each edge.
-    // Expanded:  left-rounded gradient as above.
+    // Collapsed: solid red pill flush to left edge, 6dp right margin only
+    //             (icon stays at 16dp same as every other item).
     val activeBackground = if (!expanded && (isFocused || selected)) {
-        Modifier.padding(start = 6.dp, end = 6.dp)
+        // Pill starts flush at left edge, only right margin so the icon stays
+        // at the same 16dp as every other item (no rightward shift).
+        Modifier.padding(end = 6.dp)
             .background(
                 if (isFocused) Color(0xFFFF0033) else Color(0xAAFF0033),
                 RoundedCornerShape(12.dp)
