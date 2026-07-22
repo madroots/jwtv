@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.jw.tv.data.DownloadEntity
 import org.jw.tv.api.CategoryData
 import org.jw.tv.api.LanguageInfo
 import org.jw.tv.api.MediaItem
@@ -73,6 +74,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     var downloadedIds by mutableStateOf<Set<String>>(emptySet())
         private set
+    // "contentId|quality" set for quick per-quality lookup in the UI
+    var downloadedQualities by mutableStateOf<Set<String>>(emptySet())
+        private set
 
     var isDownloadingVideo by mutableStateOf(false)
         private set
@@ -80,9 +84,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var videoDownloadProgress by mutableStateOf(0f)
         private set
 
-    fun refreshDownloadedIds() {
+    var allDownloads by mutableStateOf<List<DownloadEntity>>(emptyList())
+        private set
+
+    fun refreshDownloads() {
         viewModelScope.launch(Dispatchers.IO) {
-            downloadedIds = mediaDao.getAllDownloadedIds().toSet()
+            val all = mediaDao.getAllDownloads()
+            allDownloads = all
+            downloadedIds = all.map { it.contentId }.toSet()
+            downloadedQualities = all.map { "${it.contentId}|${it.quality}" }.toSet()
         }
     }
 
@@ -98,14 +108,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             isDownloadingVideo = false
             videoDownloadProgress = 0f
             if (ok != null) {
-                refreshDownloadedIds()
+                refreshDownloads()
                 updateCheckMessage = "Downloaded: ${video.title} ($quality)"
             } else {
                 updateCheckMessage = "Download failed: ${video.title}"
             }
         }
     }
-    // ── Content ──────────────────────────────────────────────────────────────
+
+    fun deleteDownload(contentId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val dl = mediaDao.getDownload(contentId)
+            if (dl != null) {
+                DownloadManager.deleteDownload(getApplication(), dl)
+                mediaDao.removeDownload(contentId)
+                refreshDownloads()
+            }
+        }
+    }
 
     var categories by mutableStateOf<List<CategoryData>>(emptyList())
         private set
@@ -221,7 +241,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         loadRootCategories()
         loadLanguages()
-        refreshDownloadedIds()
+        refreshDownloads()
         // Observe Room Watch Progress
         viewModelScope.launch {
             mediaDao.getWatchProgressFlow().collect { list ->

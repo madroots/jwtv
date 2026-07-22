@@ -80,6 +80,7 @@ import kotlinx.coroutines.launch
 import org.jw.tv.BuildConfig
 import org.jw.tv.api.MediaItem
 import org.jw.tv.api.MediatorClient
+import org.jw.tv.data.DownloadEntity
 import org.jw.tv.data.WatchProgressEntity
 
 private val SIDEBAR_FULL_DP = 240.dp
@@ -129,6 +130,7 @@ fun VideoBrowserScreen(
     var selectedVideoForDetails by remember { mutableStateOf<MediaItem?>(null) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showManageDownloads by remember { mutableStateOf(false) }
 
     val versionCode = remember {
         try {
@@ -451,7 +453,17 @@ fun VideoBrowserScreen(
             onOpenLanguage = {
                 showSettingsDialog = false
                 showLanguageDialog = true
+            },
+            onOpenDownloads = {
+                showSettingsDialog = false
+                showManageDownloads = true
             }
+        )
+    }
+    if (showManageDownloads) {
+        ManageDownloadsDialog(
+            viewModel = viewModel,
+            onDismiss = { showManageDownloads = false }
         )
     }
     if (viewModel.updateAvailable && !viewModel.updateDialogDismissed) {
@@ -1090,10 +1102,16 @@ fun VideoDetailsDialog(
                                 shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp))
                             ) { Text("Auto") }
                             resolutions.forEach { res ->
+                                val dq = viewModel.downloadedQualities
+                                val isDownloadedRes = "${video.contentId}|${res}" in dq
                                 OutlinedButton(
                                     onClick = { chosenResolution = res },
                                     colors = ButtonDefaults.colors(
-                                        containerColor = if (chosenResolution == res) Color(0xFF34495E) else Color.Transparent,
+                                        containerColor = when {
+                                            chosenResolution == res -> Color(0xFF34495E)
+                                            isDownloadedRes -> Color(0xFF1B3A2D)
+                                            else -> Color.Transparent
+                                        },
                                         contentColor = Color.White,
                                         focusedContainerColor = if (chosenResolution == res) Color(0xFF46637E) else Color(0xFF2A3644),
                                         focusedContentColor = Color.White
@@ -1110,7 +1128,9 @@ fun VideoDetailsDialog(
                                         )
                                     ),
                                     shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp))
-                                ) { Text(res) }
+                                ) {
+                                    Text(if (isDownloadedRes) "$res ✓" else res)
+                                }
                             }
                         }
 
@@ -1128,32 +1148,7 @@ fun VideoDetailsDialog(
                         }
 
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            // Download button — only visible when a quality is selected
-                            val isAlreadyDownloaded = chosenResolution != null &&
-                                viewModel.downloadedIds.contains(video.contentId)
-                            if (chosenResolution != null && !isAlreadyDownloaded) {
-                                Button(
-                                    onClick = { viewModel.startVideoDownload(video, chosenResolution!!) },
-                                    colors = ButtonDefaults.colors(
-                                        containerColor = Color(0xFF1E5C8C),
-                                        contentColor = Color.White,
-                                        focusedContainerColor = Color(0xFF2875B0),
-                                        focusedContentColor = Color.White
-                                    ),
-                                    border = ButtonDefaults.border(
-                                        focusedBorder = Border(
-                                            border = BorderStroke(3.dp, Color.White),
-                                            shape = RoundedCornerShape(0.dp)
-                                        )
-                                    ),
-                                    shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp)),
-                                    modifier = Modifier.height(44.dp)
-                                ) {
-                                    Text("⬇ Download", color = Color.White, fontWeight = FontWeight.Bold)
-                                }
-                            }
-
-                            // Play button
+                            // 1. Play Now — always visible, first button (focused by default)
                             Button(
                                 onClick = { onPlay(chosenResolution) },
                                 colors = ButtonDefaults.colors(
@@ -1174,10 +1169,61 @@ fun VideoDetailsDialog(
                                     .height(44.dp)
                                     .focusRequester(playButtonFocusRequester)
                             ) {
-                                Text("▶ Play Video", color = Color.White, fontWeight = FontWeight.Bold)
+                                Text("▶ Play Now", color = Color.White, fontWeight = FontWeight.Bold)
                             }
 
-                            // Favorite — heart icon only, no text
+                            // 2. Download button (icon only, or "Saved" if already downloaded)
+                            val isQualityDownloaded = chosenResolution != null &&
+                                "${video.contentId}|${chosenResolution}" in viewModel.downloadedQualities
+                            if (chosenResolution != null) {
+                                if (isQualityDownloaded) {
+                                    OutlinedButton(
+                                        onClick = {},
+                                        colors = ButtonDefaults.colors(
+                                            containerColor = Color(0xFF1B3A2D),
+                                            contentColor = Color(0xFF66BB6A),
+                                            focusedContainerColor = Color(0xFF1B3A2D),
+                                            focusedContentColor = Color(0xFF66BB6A)
+                                        ),
+                                        border = ButtonDefaults.border(
+                                            border = Border(
+                                                border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
+                                                shape = RoundedCornerShape(0.dp)
+                                            ),
+                                            focusedBorder = Border(
+                                                border = BorderStroke(2.dp, Color.White),
+                                                shape = RoundedCornerShape(0.dp)
+                                            )
+                                        ),
+                                        shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp)),
+                                        modifier = Modifier.height(44.dp)
+                                    ) {
+                                        Text("✓ Saved", color = Color(0xFF66BB6A), fontWeight = FontWeight.Bold)
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = { viewModel.startVideoDownload(video, chosenResolution!!) },
+                                        colors = ButtonDefaults.colors(
+                                            containerColor = Color(0xFF1E5C8C),
+                                            contentColor = Color.White,
+                                            focusedContainerColor = Color(0xFF2875B0),
+                                            focusedContentColor = Color.White
+                                        ),
+                                        border = ButtonDefaults.border(
+                                            focusedBorder = Border(
+                                                border = BorderStroke(3.dp, Color.White),
+                                                shape = RoundedCornerShape(0.dp)
+                                            )
+                                        ),
+                                        shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp)),
+                                        modifier = Modifier.height(44.dp)
+                                    ) {
+                                        Text("⬇", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                                    }
+                                }
+                            }
+
+                            // 3. Favorite — heart icon only
                             OutlinedButton(
                                 onClick = { viewModel.toggleFavorite(video) },
                                 colors = ButtonDefaults.colors(
@@ -1421,10 +1467,11 @@ private fun LangRow(
 fun SettingsDialog(
     viewModel: MainViewModel,
     onDismiss: () -> Unit,
-    onOpenLanguage: () -> Unit = {}
+    onOpenLanguage: () -> Unit = {},
+    onOpenDownloads: () -> Unit = {}
 ) {
-    val qualities = listOf("Auto", "144p", "240p", "360p", "480p", "720p", "1080p", "2160p")
     val context = LocalContext.current
+    val qualities = listOf("Auto", "144p", "240p", "360p", "480p", "720p", "1080p", "2160p")
     val settingsVersionCode = try {
         val pkg = context.packageManager.getPackageInfo(context.packageName, 0)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P)
@@ -1531,8 +1578,31 @@ fun SettingsDialog(
                     color = Color(0xFF5A6B7C),
                     fontSize = 11.sp
                 )
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(16.dp))
 
+                // Manage Downloads
+                OutlinedButton(
+                    onClick = onOpenDownloads,
+                    colors = ButtonDefaults.colors(
+                        contentColor = Color.White,
+                        focusedContainerColor = Color(0xFF2A3644),
+                        focusedContentColor = Color.White
+                    ),
+                    border = ButtonDefaults.border(
+                        border = Border(
+                            border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
+                            shape = RoundedCornerShape(0.dp)
+                        ),
+                        focusedBorder = Border(
+                            border = BorderStroke(2.dp, Color.White),
+                            shape = RoundedCornerShape(0.dp)
+                        )
+                    ),
+                    shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp))
+                ) {
+                    Text("Manage Downloads", color = Color.White)
+                }
+                Spacer(Modifier.height(24.dp))
                 // Check for Update
                 Button(
                     onClick = {
@@ -1555,6 +1625,130 @@ fun SettingsDialog(
                 Spacer(Modifier.height(20.dp))
 
                 // Close
+                OutlinedButton(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.colors(
+                        contentColor = Color.White,
+                        focusedContainerColor = Color(0xFF2A3644),
+                        focusedContentColor = Color.White
+                    ),
+                    border = ButtonDefaults.border(
+                        border = Border(
+                            border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
+                            shape = RoundedCornerShape(0.dp)
+                        ),
+                        focusedBorder = Border(
+                            border = BorderStroke(2.dp, Color.White),
+                            shape = RoundedCornerShape(0.dp)
+                        )
+                    ),
+                    shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp)),
+                    modifier = Modifier.align(Alignment.End)
+                ) { Text("Close") }
+            }
+        }
+    }
+}
+// ── Manage Downloads dialog ───────────────────────────────────────────────────
+
+@Composable
+fun ManageDownloadsDialog(
+    viewModel: MainViewModel,
+    onDismiss: () -> Unit
+) {
+    var downloads by remember { mutableStateOf(viewModel.allDownloads) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .width(560.dp)
+                .height(480.dp)
+                .background(Color(0xFF1E1E1E))
+        ) {
+            Column(Modifier.fillMaxWidth().padding(20.dp)) {
+                Text(
+                    "Manage Downloads",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(Modifier.height(16.dp))
+
+                if (downloads.isEmpty()) {
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text("No downloaded videos.", color = Color(0xFF8B949E), fontSize = 14.sp)
+                    }
+                } else {
+                    Column(
+                        Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        downloads.forEach { dl ->
+                            Surface(
+                                onClick = {},
+                                colors = ClickableSurfaceDefaults.colors(
+                                    containerColor = Color(0xFF262626),
+                                    focusedContainerColor = Color(0xFF333333)
+                                ),
+                                shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(0.dp)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            dl.title,
+                                            color = Color.White,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            "Quality: ${dl.quality}",
+                                            color = Color(0xFF8B949E),
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            viewModel.deleteDownload(dl.contentId)
+                                            downloads = viewModel.allDownloads
+                                        },
+                                        colors = ButtonDefaults.colors(
+                                            contentColor = Color(0xFFFF0033),
+                                            focusedContainerColor = Color(0xFF2A3644),
+                                            focusedContentColor = Color(0xFFFF0033)
+                                        ),
+                                        border = ButtonDefaults.border(
+                                            border = Border(
+                                                border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
+                                                shape = RoundedCornerShape(0.dp)
+                                            ),
+                                            focusedBorder = Border(
+                                                border = BorderStroke(2.dp, Color.White),
+                                                shape = RoundedCornerShape(0.dp)
+                                            )
+                                        ),
+                                        shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp)),
+                                        modifier = Modifier.height(36.dp)
+                                    ) { Text("Delete", color = Color(0xFFFF0033), fontSize = 12.sp) }
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
                 OutlinedButton(
                     onClick = onDismiss,
                     colors = ButtonDefaults.colors(

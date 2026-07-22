@@ -54,6 +54,9 @@ interface MediaDao {
     @Query("SELECT contentId FROM downloads")
     suspend fun getAllDownloadedIds(): List<String>
 
+    @Query("SELECT * FROM downloads")
+    suspend fun getAllDownloads(): List<DownloadEntity>
+
     @Query("SELECT * FROM downloads ORDER BY downloadedAt DESC")
     fun getDownloadsFlow(): Flow<List<DownloadEntity>>
 }
