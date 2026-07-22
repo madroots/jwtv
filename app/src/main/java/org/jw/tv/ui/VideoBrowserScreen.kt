@@ -13,6 +13,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -932,6 +933,7 @@ fun VideoDetailsDialog(
     val resolutions = remember(video) {
         video.files?.mapNotNull { it.label }?.distinct() ?: emptyList()
     }
+    val resolutionsScrollState = rememberScrollState()
     val playButtonFocusRequester = remember { FocusRequester() }
     val isFavorite = video.contentId in viewModel.favoriteContentIds
 
@@ -1020,7 +1022,10 @@ fun VideoDetailsDialog(
 
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("Quality / Calidad:", color = Color.LightGray, fontSize = 13.sp)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            Modifier.horizontalScroll(resolutionsScrollState),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             OutlinedButton(
                                 onClick = { chosenResolution = null },
                                 colors = ButtonDefaults.colors(
