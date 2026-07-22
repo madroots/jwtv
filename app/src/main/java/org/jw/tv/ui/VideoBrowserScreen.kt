@@ -447,7 +447,11 @@ fun VideoBrowserScreen(
     if (showSettingsDialog) {
         SettingsDialog(
             viewModel = viewModel,
-            onDismiss = { showSettingsDialog = false }
+            onDismiss = { showSettingsDialog = false },
+            onOpenLanguage = {
+                showSettingsDialog = false
+                showLanguageDialog = true
+            }
         )
     }
     if (viewModel.updateAvailable && !viewModel.updateDialogDismissed) {
@@ -1371,17 +1375,19 @@ private fun LangRow(
             color = Color.White,
             fontSize = 14.sp,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
         )
     }
 }
+
 // ── Settings dialog ───────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun SettingsDialog(
     viewModel: MainViewModel,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onOpenLanguage: () -> Unit = {}
 ) {
     val qualities = listOf("Auto", "144p", "240p", "360p", "480p", "720p", "1080p", "2160p")
     val context = LocalContext.current
@@ -1465,7 +1471,7 @@ fun SettingsDialog(
                 )
                 Spacer(Modifier.height(10.dp))
                 OutlinedButton(
-                    onClick = onDismiss,
+                    onClick = onOpenLanguage,
                     colors = ButtonDefaults.colors(
                         contentColor = Color.White,
                         focusedContainerColor = Color(0xFF2A3644),
