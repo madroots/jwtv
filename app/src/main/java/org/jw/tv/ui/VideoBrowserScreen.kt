@@ -480,7 +480,7 @@ fun VideoBrowserScreen(
                     border = ButtonDefaults.border(
                         focusedBorder = Border(
                             border = BorderStroke(3.dp, Color.White),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(24.dp)
                         )
                     ),
                     modifier = Modifier.focusRequester(updateFocusRequester)
@@ -497,7 +497,7 @@ fun VideoBrowserScreen(
                     border = ButtonDefaults.border(
                         focusedBorder = Border(
                             border = BorderStroke(2.dp, Color.White),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(24.dp)
                         )
                     )
                 ) { Text("Later") }
@@ -579,11 +579,11 @@ fun ContinueWatchingCard(
             containerColor = Color(0xFF161B22),
             focusedContainerColor = Color(0xFF161B22)
         ),
-        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(10.dp)),
+        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(24.dp)),
         border = ClickableSurfaceDefaults.border(
             focusedBorder = Border(
                 border = BorderStroke(2.dp, Color.White),
-                shape = RoundedCornerShape(10.dp)
+                shape = RoundedCornerShape(24.dp)
             )
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
@@ -657,7 +657,7 @@ private fun SidebarItem(
             else -> null
         }
     }
-    val highlightShape = RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp)
+    val highlightShape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp)
 
     // Collapsed: solid red pill flush to left edge, 6dp right margin only
     //             (icon stays at 16dp same as every other item).
@@ -667,7 +667,7 @@ private fun SidebarItem(
         Modifier.padding(end = 6.dp)
             .background(
                 if (isFocused) Color(0xFFFF0033) else Color(0xAAFF0033),
-                RoundedCornerShape(12.dp)
+                RoundedCornerShape(24.dp)
             )
     } else if (expanded && highlightBrush != null) {
         Modifier.background(highlightBrush, highlightShape)
@@ -680,7 +680,7 @@ private fun SidebarItem(
             focusedContainerColor = Color.Transparent,
             pressedContainerColor = Color.Transparent
         ),
-        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(8.dp)),
+        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(24.dp)),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
         modifier = Modifier
             .fillMaxWidth()
@@ -866,11 +866,11 @@ fun VideoCard(
             containerColor = Color(0xFF161B22),
             focusedContainerColor = Color(0xFF161B22)
         ),
-        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(10.dp)),
+        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(24.dp)),
         border = ClickableSurfaceDefaults.border(
             focusedBorder = Border(
                 border = BorderStroke(2.dp, Color.White),
-                shape = RoundedCornerShape(10.dp)
+                shape = RoundedCornerShape(24.dp)
             )
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
@@ -1033,14 +1033,14 @@ fun VideoDetailsDialog(
                                 border = ButtonDefaults.border(
                                     border = Border(
                                         border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
-                                        shape = RoundedCornerShape(20.dp)
+                                        shape = RoundedCornerShape(24.dp)
                                     ),
                                     focusedBorder = Border(
                                         border = BorderStroke(2.dp, Color.White),
-                                        shape = RoundedCornerShape(20.dp)
+                                        shape = RoundedCornerShape(24.dp)
                                     )
                                 ),
-                                shape = ButtonDefaults.shape(shape = RoundedCornerShape(20.dp))
+                                shape = ButtonDefaults.shape(shape = RoundedCornerShape(24.dp))
                             ) { Text("Auto") }
                             resolutions.forEach { res ->
                                 OutlinedButton(
@@ -1055,14 +1055,14 @@ fun VideoDetailsDialog(
                                     border = ButtonDefaults.border(
                                         border = Border(
                                             border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
-                                            shape = RoundedCornerShape(20.dp)
+                                            shape = RoundedCornerShape(24.dp)
                                         ),
                                         focusedBorder = Border(
                                             border = BorderStroke(2.dp, Color.White),
-                                            shape = RoundedCornerShape(20.dp)
+                                            shape = RoundedCornerShape(24.dp)
                                         )
                                     ),
-                                    shape = ButtonDefaults.shape(shape = RoundedCornerShape(20.dp))
+                                    shape = ButtonDefaults.shape(shape = RoundedCornerShape(24.dp))
                                 ) { Text(res) }
                             }
                         }
@@ -1279,11 +1279,11 @@ fun LanguageSelectionDialog(
                     border = ButtonDefaults.border(
                         border = Border(
                             border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(24.dp)
                         ),
                         focusedBorder = Border(
                             border = BorderStroke(2.dp, Color.White),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(24.dp)
                         )
                     ),
                     modifier = Modifier.align(Alignment.End)
@@ -1308,11 +1308,11 @@ private fun LangRow(
             focusedContainerColor = Color(0xFF383838),
             focusedContentColor = Color.White
         ),
-        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(8.dp)),
+        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(24.dp)),
         border = ClickableSurfaceDefaults.border(
             focusedBorder = Border(
                 border = BorderStroke(2.dp, Color.White),
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(24.dp)
             )
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
