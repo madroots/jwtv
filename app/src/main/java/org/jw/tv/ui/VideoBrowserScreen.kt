@@ -969,6 +969,27 @@ fun VideoCard(
                     )
                 }
                 val dur = formatDuration(video.duration)
+                if (dur.isNotEmpty()) {
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(6.dp)
+                            .background(Color(0xCC000000), RoundedCornerShape(0.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(dur, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+            Box(Modifier.fillMaxWidth().padding(8.dp)) {
+                Text(
+                    video.title,
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
@@ -991,10 +1012,15 @@ fun VideoDetailsDialog(
     val isFavorite = video.contentId in viewModel.favoriteContentIds
 
     LaunchedEffect(Unit) {
-        // Pre-select default quality if available
-        val def = viewModel.defaultQuality
-        if (def != null && def in resolutions) {
-            chosenResolution = def
+        // Priority: downloaded quality > user default > Auto
+        val downloadedRes = resolutions.firstOrNull { "${video.contentId}|${it}" in viewModel.downloadedQualities }
+        if (downloadedRes != null) {
+            chosenResolution = downloadedRes
+        } else {
+            val def = viewModel.defaultQuality
+            if (def != null && def in resolutions) {
+                chosenResolution = def
+            }
         }
         try { playButtonFocusRequester.requestFocus() } catch (e: Exception) {}
     }
