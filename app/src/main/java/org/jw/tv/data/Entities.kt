@@ -25,3 +25,14 @@ data class FavoriteEntity(
     val addedTimestamp: Long,
     val rawMediaItemJson: String
 )
+@Entity(tableName = "downloads")
+data class DownloadEntity(
+    @PrimaryKey val contentId: String,
+    val title: String,
+    val thumbnailUrl: String?,
+    val durationSeconds: Double?,
+    val quality: String,
+    val filePath: String,
+    val downloadedAt: Long,
+    val rawMediaItemJson: String
+)

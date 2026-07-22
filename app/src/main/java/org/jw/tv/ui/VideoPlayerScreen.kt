@@ -78,10 +78,23 @@ fun VideoPlayerScreen(
             oldPos
         } else 0L
     }
-
     var currentResolution by remember { mutableStateOf(selectedResolution) }
+
+    // Check for locally downloaded file first — if available, play from local
+    // storage instead of streaming.
     var videoUrl by remember(currentResolution) {
-        mutableStateOf(getBestVideoUrl(video, currentResolution) ?: "")
+        val localFile = currentResolution?.let { res ->
+            val f = java.io.File(context.filesDir, "downloads/${video.contentId}_${res}.mp4")
+            if (f.exists()) f.absolutePath else null
+        }
+        mutableStateOf(
+            if (localFile != null) localFile
+            else (getBestVideoUrl(video, currentResolution) ?: "")
+        )
+    }
+
+    val isPlayingLocalVideo by remember(videoUrl) {
+        mutableStateOf(videoUrl.startsWith("/"))
     }
 
     var isBuffering by remember { mutableStateOf(true) }

@@ -289,7 +289,8 @@ fun VideoBrowserScreen(
                                         ) { video ->
                                             VideoCard(
                                                 video = video,
-                                                onClick = { selectedVideoForDetails = video }
+                                                onClick = { selectedVideoForDetails = video },
+                                                downloadedIds = viewModel.downloadedIds
                                             )
                                         }
                                     }
@@ -848,6 +849,7 @@ fun HeroBanner(
 fun VideoCard(
     video: MediaItem,
     onClick: () -> Unit,
+    downloadedIds: Set<String> = emptySet(),
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -885,23 +887,24 @@ fun VideoCard(
                     modifier = Modifier.fillMaxSize().background(Color(0xFF1A1F27)),
                     contentScale = ContentScale.Crop
                 )
-                val dur = formatDuration(video.duration)
-                if (dur.isNotEmpty()) {
+                // Download indicator overlay
+                if (video.contentId in downloadedIds) {
                     Box(
                         Modifier
-                            .align(Alignment.BottomEnd)
+                            .align(Alignment.TopStart)
                             .padding(6.dp)
                             .background(Color(0xCC000000), RoundedCornerShape(0.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            dur,
-                            color = Color.White,
+                            "⬇",
+                            color = Color(0xFF4FC3F7),
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
+                val dur = formatDuration(video.duration)
             }
             Box(Modifier.fillMaxWidth().padding(8.dp)) {
                 Text(
@@ -1075,7 +1078,44 @@ fun VideoDetailsDialog(
 
                         Spacer(Modifier.height(8.dp))
 
+                        // Download progress indicator
+                        if (viewModel.isDownloadingVideo) {
+                            LinearProgressIndicator(
+                                progress = { viewModel.videoDownloadProgress },
+                                color = Color(0xFFFF0033),
+                                trackColor = Color(0x66000000),
+                                modifier = Modifier.fillMaxWidth().height(4.dp)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                        }
+
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            // Download button — only visible when a quality is selected
+                            val isAlreadyDownloaded = chosenResolution != null &&
+                                viewModel.downloadedIds.contains(video.contentId)
+                            if (chosenResolution != null && !isAlreadyDownloaded) {
+                                Button(
+                                    onClick = { viewModel.startVideoDownload(video, chosenResolution!!) },
+                                    colors = ButtonDefaults.colors(
+                                        containerColor = Color(0xFF1E5C8C),
+                                        contentColor = Color.White,
+                                        focusedContainerColor = Color(0xFF2875B0),
+                                        focusedContentColor = Color.White
+                                    ),
+                                    border = ButtonDefaults.border(
+                                        focusedBorder = Border(
+                                            border = BorderStroke(3.dp, Color.White),
+                                            shape = RoundedCornerShape(0.dp)
+                                        )
+                                    ),
+                                    shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp)),
+                                    modifier = Modifier.height(44.dp)
+                                ) {
+                                    Text("⬇ Download", color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            // Play button
                             Button(
                                 onClick = { onPlay(chosenResolution) },
                                 colors = ButtonDefaults.colors(
@@ -1099,6 +1139,7 @@ fun VideoDetailsDialog(
                                 Text("▶ Play Video", color = Color.White, fontWeight = FontWeight.Bold)
                             }
 
+                            // Favorite — heart icon only, no text
                             OutlinedButton(
                                 onClick = { viewModel.toggleFavorite(video) },
                                 colors = ButtonDefaults.colors(
@@ -1118,11 +1159,12 @@ fun VideoDetailsDialog(
                                     )
                                 ),
                                 shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp)),
-                                modifier = Modifier.height(44.dp)
+                                modifier = Modifier.size(44.dp)
                             ) {
                                 Text(
-                                    if (isFavorite) "❤️ Favorited" else "🤍 Add Favorite",
-                                    color = Color.White
+                                    if (isFavorite) "♥" else "♡",
+                                    color = if (isFavorite) Color(0xFFFF0033) else Color.White,
+                                    fontSize = 20.sp
                                 )
                             }
                         }

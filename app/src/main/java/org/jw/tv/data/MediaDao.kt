@@ -33,4 +33,27 @@ interface MediaDao {
 
     @Query("DELETE FROM favorites WHERE contentId = :contentId")
     suspend fun removeFavorite(contentId: String)
+
+    // ── Downloads ────────────────────────────────────────────────────────────
+
+    @Query("SELECT EXISTS(SELECT 1 FROM downloads WHERE contentId = :contentId AND quality = :quality)")
+    suspend fun isDownloaded(contentId: String, quality: String): Boolean
+
+    @Query("SELECT * FROM downloads WHERE contentId = :contentId")
+    suspend fun getDownload(contentId: String): DownloadEntity?
+
+    @Query("SELECT * FROM downloads WHERE contentId = :contentId AND quality = :quality")
+    suspend fun getDownloadForQuality(contentId: String, quality: String): DownloadEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun addDownload(download: DownloadEntity)
+
+    @Query("DELETE FROM downloads WHERE contentId = :contentId")
+    suspend fun removeDownload(contentId: String)
+
+    @Query("SELECT contentId FROM downloads")
+    suspend fun getAllDownloadedIds(): List<String>
+
+    @Query("SELECT * FROM downloads ORDER BY downloadedAt DESC")
+    fun getDownloadsFlow(): Flow<List<DownloadEntity>>
 }

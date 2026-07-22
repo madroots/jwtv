@@ -20,6 +20,7 @@ import kotlinx.coroutines.withContext
 import org.jw.tv.api.CategoryData
 import org.jw.tv.api.LanguageInfo
 import org.jw.tv.api.MediaItem
+import org.jw.tv.api.DownloadManager
 import org.jw.tv.api.MediatorClient
 
 // PERF-5: @Immutable enables Compose recomposition skipping when the same
@@ -67,6 +68,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun updateDefaultQuality(quality: String?) {
         defaultQuality = quality
         sharedPrefs.edit().putString("default_quality", quality).apply()
+    }
+    // ── Downloads ─────────────────────────────────────────────────────────────
+
+    var downloadedIds by mutableStateOf<Set<String>>(emptySet())
+        private set
+
+    var isDownloadingVideo by mutableStateOf(false)
+        private set
+
+    var videoDownloadProgress by mutableStateOf(0f)
+        private set
+
+    fun refreshDownloadedIds() {
+        viewModelScope.launch(Dispatchers.IO) {
+            downloadedIds = mediaDao.getAllDownloadedIds().toSet()
+        }
+    }
+
+    fun startVideoDownload(video: MediaItem, quality: String) {
+        val app = getApplication<Application>()
+        isDownloadingVideo = true
+        videoDownloadProgress = 0f
+        viewModelScope.launch {
+            val ok = DownloadManager.downloadVideo(
+                app, video, quality, mediaDao,
+                onProgress = { progress -> videoDownloadProgress = progress }
+            )
+            isDownloadingVideo = false
+            videoDownloadProgress = 0f
+            if (ok != null) {
+                refreshDownloadedIds()
+                updateCheckMessage = "Downloaded: ${video.title} ($quality)"
+            } else {
+                updateCheckMessage = "Download failed: ${video.title}"
+            }
+        }
     }
     // ── Content ──────────────────────────────────────────────────────────────
 
@@ -184,7 +221,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         loadRootCategories()
         loadLanguages()
-
+        refreshDownloadedIds()
         // Observe Room Watch Progress
         viewModelScope.launch {
             mediaDao.getWatchProgressFlow().collect { list ->
