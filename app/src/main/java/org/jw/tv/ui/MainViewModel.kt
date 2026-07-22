@@ -57,6 +57,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var selectedResolution by mutableStateOf<String?>(null)
     var activeVideo by mutableStateOf<MediaItem?>(null)
 
+    // ── Settings ──────────────────────────────────────────────────────────────
+
+    var defaultQuality by mutableStateOf<String?>(
+        sharedPrefs.getString("default_quality", null)
+    )
+        private set
+
+    fun updateDefaultQuality(quality: String?) {
+        defaultQuality = quality
+        sharedPrefs.edit().putString("default_quality", quality).apply()
+    }
     // ── Content ──────────────────────────────────────────────────────────────
 
     var categories by mutableStateOf<List<CategoryData>>(emptyList())

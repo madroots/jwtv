@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.PeopleAlt
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tv
@@ -127,6 +128,7 @@ fun VideoBrowserScreen(
 
     var selectedVideoForDetails by remember { mutableStateOf<MediaItem?>(null) }
     var showLanguageDialog by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
 
     val versionCode = remember {
         try {
@@ -396,9 +398,7 @@ fun VideoBrowserScreen(
                     )
                 }
             }
-
-            // Bottom: Language + Update + version string (no extra padding —
-            // SidebarItem's own 8dp+16dp puts icons at 24dp, same as nav icons)
+            // Bottom: Settings + version string
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -406,18 +406,11 @@ fun VideoBrowserScreen(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 SidebarItem(
-                    icon = Icons.Filled.Language,
-                    label = viewModel.selectedLanguageName,
+                    icon = Icons.Filled.Settings,
+                    label = "Settings",
                     selected = false,
                     expanded = sidebarExpanded,
-                    onClick = { showLanguageDialog = true }
-                )
-                SidebarItem(
-                    icon = Icons.Filled.Refresh,
-                    label = "Check for Update",
-                    selected = false,
-                    expanded = sidebarExpanded,
-                    onClick = { viewModel.checkForUpdates(versionCode, manual = true) }
+                    onClick = { showSettingsDialog = true }
                 )
                 if (sidebarExpanded) {
                     Text(
@@ -446,11 +439,16 @@ fun VideoBrowserScreen(
             }
         )
     }
-
     if (showLanguageDialog) {
         LanguageSelectionDialog(viewModel = viewModel, onDismiss = { showLanguageDialog = false })
     }
 
+    if (showSettingsDialog) {
+        SettingsDialog(
+            viewModel = viewModel,
+            onDismiss = { showSettingsDialog = false }
+        )
+    }
     if (viewModel.updateAvailable && !viewModel.updateDialogDismissed) {
         val updateFocusRequester = remember { FocusRequester() }
         LaunchedEffect(Unit) {
@@ -938,10 +936,13 @@ fun VideoDetailsDialog(
     val isFavorite = video.contentId in viewModel.favoriteContentIds
 
     LaunchedEffect(Unit) {
+        // Pre-select default quality if available
+        val def = viewModel.defaultQuality
+        if (def != null && def in resolutions) {
+            chosenResolution = def
+        }
         try { playButtonFocusRequester.requestFocus() } catch (e: Exception) {}
     }
-
-    // Real window-modal Dialog: focus and input CANNOT escape to the content
     // behind it. BACK fires onDismissRequest exactly once (dismissOnBackPress).
     // dismissOnClickOutside = false: the only way out is BACK.
     Dialog(
@@ -1333,8 +1334,170 @@ private fun LangRow(
         )
     }
 }
-// ── Utilities ────────────────────────────────────────────────────────────────
+// ── Settings dialog ───────────────────────────────────────────────────────────
 
+@Composable
+fun SettingsDialog(
+    viewModel: MainViewModel,
+    onDismiss: () -> Unit
+) {
+    val qualities = listOf("Auto", "144p", "240p", "360p", "480p", "720p", "1080p", "2160p")
+    val context = LocalContext.current
+    val settingsVersionCode = try {
+        val pkg = context.packageManager.getPackageInfo(context.packageName, 0)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P)
+            pkg.longVersionCode.toInt()
+        else
+            @Suppress("DEPRECATION") pkg.versionCode
+    } catch (e: Exception) { 1 }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .width(500.dp)
+                .background(Color(0xFF1E1E1E))
+        ) {
+            Column(Modifier.fillMaxWidth().padding(24.dp)) {
+                Text(
+                    "Settings",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(Modifier.height(20.dp))
+
+                // Default Quality
+                Text(
+                    "Default Quality",
+                    color = Color(0xFF8B949E),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    qualities.forEach { q ->
+                        val isSelected = if (q == "Auto") viewModel.defaultQuality == null
+                                          else viewModel.defaultQuality == q
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.updateDefaultQuality(if (q == "Auto") null else q)
+                            },
+                            colors = ButtonDefaults.colors(
+                                containerColor = if (isSelected) Color(0xFF34495E) else Color.Transparent,
+                                contentColor = Color.White,
+                                focusedContainerColor = if (isSelected) Color(0xFF46637E) else Color(0xFF2A3644),
+                                focusedContentColor = Color.White
+                            ),
+                            border = ButtonDefaults.border(
+                                border = Border(
+                                    border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
+                                    shape = RoundedCornerShape(0.dp)
+                                ),
+                                focusedBorder = Border(
+                                    border = BorderStroke(2.dp, Color.White),
+                                    shape = RoundedCornerShape(0.dp)
+                                )
+                            ),
+                            shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp))
+                        ) { Text(q) }
+                    }
+                }
+                Spacer(Modifier.height(24.dp))
+
+                // Language
+                Text(
+                    "Language",
+                    color = Color(0xFF8B949E),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.colors(
+                        contentColor = Color.White,
+                        focusedContainerColor = Color(0xFF2A3644),
+                        focusedContentColor = Color.White
+                    ),
+                    border = ButtonDefaults.border(
+                        border = Border(
+                            border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
+                            shape = RoundedCornerShape(0.dp)
+                        ),
+                        focusedBorder = Border(
+                            border = BorderStroke(2.dp, Color.White),
+                            shape = RoundedCornerShape(0.dp)
+                        )
+                    ),
+                    shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp))
+                ) {
+                    Text("Language: ${viewModel.selectedLanguageName}", color = Color.White)
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Switch language from the main menu sidebar.",
+                    color = Color(0xFF5A6B7C),
+                    fontSize = 11.sp
+                )
+                Spacer(Modifier.height(24.dp))
+
+                // Check for Update
+                Button(
+                    onClick = {
+                        viewModel.checkForUpdates(settingsVersionCode, manual = true)
+                    },
+                    colors = ButtonDefaults.colors(
+                        containerColor = Color(0xFFFF0033),
+                        contentColor = Color.White,
+                        focusedContainerColor = Color(0xFFFF3355),
+                        focusedContentColor = Color.White
+                    ),
+                    border = ButtonDefaults.border(
+                        focusedBorder = Border(
+                            border = BorderStroke(3.dp, Color.White),
+                            shape = RoundedCornerShape(0.dp)
+                        )
+                    ),
+                    shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp))
+                ) { Text("Check for Update") }
+                Spacer(Modifier.height(20.dp))
+
+                // Close
+                OutlinedButton(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.colors(
+                        contentColor = Color.White,
+                        focusedContainerColor = Color(0xFF2A3644),
+                        focusedContentColor = Color.White
+                    ),
+                    border = ButtonDefaults.border(
+                        border = Border(
+                            border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
+                            shape = RoundedCornerShape(0.dp)
+                        ),
+                        focusedBorder = Border(
+                            border = BorderStroke(2.dp, Color.White),
+                            shape = RoundedCornerShape(0.dp)
+                        )
+                    ),
+                    shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp)),
+                    modifier = Modifier.align(Alignment.End)
+                ) { Text("Close") }
+            }
+        }
+    }
+}
+// ── Utilities ────────────────────────────────────────────────────────────────
 fun formatDuration(durationSeconds: Double?): String {
     if (durationSeconds == null || durationSeconds <= 0) return ""
     val total = durationSeconds.toInt()
