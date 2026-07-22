@@ -1,53 +1,37 @@
 # JW TV
 
-An Android TV application for browsing and watching videos from the JW.org media library. Features a native TV interface with support for video downloads, favorites, watch progress tracking, and quality selection.
+[![Platform](https://img.shields.io/badge/platform-Android%20TV-FF0033?style=flat-square)](https://github.com/madroots/jwtv)
+[![Min SDK](https://img.shields.io/badge/minSdk-21-FF0033?style=flat-square)]()
+[![Target SDK](https://img.shields.io/badge/targetSdk-35-FF0033?style=flat-square)]()
+[![License](https://img.shields.io/badge/license-Personal%20Use-FF0033?style=flat-square)]()
+
+An Android TV application for browsing and watching videos from the JW.org media library with a native TV interface.
+
+## Download
+
+Install directly on your Android TV using **AFTV News Downloader**:
+
+1. Open **AFTV News Downloader** on your TV
+2. Enter code: **`3971590`**
+3. Download and install
+
+Alternatively, grab the latest APK from the [Releases](https://github.com/madroots/jwtv/releases) page.
 
 ## Features
 
 - **Browse JW Library** — Explore video categories (Studio, Children, Family, Bible, Movies, Series, etc.)
-- **Video Playback** — Stream videos with resolution selection (up to 2160p)
+- **Video Playback** — Stream with resolution selection (up to 2160p)
 - **Download & Offline** — Save videos to your device for offline playback
-- **Watch Progress** — Automatically resume videos from where you left off, with visual progress indicators on thumbnails
-- **Favorites** — Save videos to a personal favorites list
+- **Watch Progress** — Resume videos from where you left off with visual progress indicators
+- **Favorites** — Save videos to a personal list
 - **Language Support** — Select from 100+ languages available on JW.org
 - **Auto-Update** — Built-in update checker downloads and installs new versions directly on your TV
-
-## Screenshots
-
-*(Add screenshots here)*
-
-## Building
-
-```bash
-# Clone the repository
-git clone https://github.com/madroots/jwtv.git
-cd jwtv
-
-# Build debug APK
-./gradlew assembleDebug
-
-# Build release APK
-./gradlew assembleRelease
-```
-
-The built APK will be at `app/build/outputs/apk/debug/app-debug.apk`.
 
 ## Requirements
 
 - **Android TV** device running Android 7.0 (API 24) or later
-- Network connection for streaming and updates
-- Approximately 500 MB free storage for downloaded content
+- Network connection for streaming
 
-## Technology Stack
+## Disclaimer
 
-- **Language:** Kotlin
-- **UI Framework:** Jetpack Compose for TV (Material3)
-- **Media Player:** ExoPlayer / Media3
-- **Networking:** OkHttp
-- **Persistence:** Room Database (favorites, watch progress, downloads)
-- **Image Loading:** Coil
-- **Build System:** Gradle 8.8
-
-## License
-
-This project is for personal and educational use. JW Library content is copyrighted by Jehovah's Witnesses and is used in accordance with their terms of service.
+This project is for **personal and educational use only**. It is not affiliated with, endorsed by, or connected to Jehovah's Witnesses in any way. All media content is property of Jehovah's Witnesses and is accessed through their public API.
