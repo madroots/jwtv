@@ -292,7 +292,8 @@ fun VideoBrowserScreen(
                                             VideoCard(
                                                 video = video,
                                                 onClick = { selectedVideoForDetails = video },
-                                                downloadedIds = viewModel.downloadedIds
+                                                downloadedIds = viewModel.downloadedIds,
+                                                progressFraction = viewModel.watchProgressMap[video.contentId]
                                             )
                                         }
                                     }
@@ -900,6 +901,7 @@ fun VideoCard(
     video: MediaItem,
     onClick: () -> Unit,
     downloadedIds: Set<String> = emptySet(),
+    progressFraction: Float? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -954,23 +956,23 @@ fun VideoCard(
                         )
                     }
                 }
+                val pf = progressFraction
+                if (pf != null && pf > 0.01f) {
+                    LinearProgressIndicator(
+                        progress = { pf },
+                        color = Color(0xFFFF0033),
+                        trackColor = Color(0x66000000),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .align(Alignment.BottomCenter)
+                    )
+                }
                 val dur = formatDuration(video.duration)
-            }
-            Box(Modifier.fillMaxWidth().padding(8.dp)) {
-                Text(
-                    video.title,
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
             }
         }
     }
 }
-
-// ── TV-Native Video Details Overlay ──────────────────────────────────────────
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -1073,47 +1075,46 @@ fun VideoDetailsDialog(
                             )
                         }
                     }
+                    // Continue Watching progress bar in modal
+                    val progFrac = viewModel.watchProgressMap[video.contentId]
+                    if (progFrac != null && progFrac > 0.01f) {
+                        Spacer(Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { progFrac },
+                            color = Color(0xFFFF0033),
+                            trackColor = Color(0x66000000),
+                            modifier = Modifier.fillMaxWidth().height(4.dp)
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Resume from ${formatDuration((video.duration ?: 0.0) * progFrac.toDouble())}",
+                            color = Color(0xFF8B949E),
+                            fontSize = 11.sp
+                        )
+                    }
 
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("Quality / Calidad:", color = Color.LightGray, fontSize = 13.sp)
-                        Row(
-                            Modifier.horizontalScroll(resolutionsScrollState),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        // Vertical stacked quality chips — no horizontal scroll needed
+                        val allQualities = listOf(null) + resolutions
+                        Column(
+                            Modifier.heightIn(max = 180.dp).verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            OutlinedButton(
-                                onClick = { chosenResolution = null },
-                                colors = ButtonDefaults.colors(
-                                    containerColor = if (chosenResolution == null) Color(0xFF34495E) else Color.Transparent,
-                                    contentColor = Color.White,
-                                    focusedContainerColor = if (chosenResolution == null) Color(0xFF46637E) else Color(0xFF2A3644),
-                                    focusedContentColor = Color.White
-                                ),
-                                scale = ButtonDefaults.scale(focusedScale = 1.0f),
-                                border = ButtonDefaults.border(
-                                    border = Border(
-                                        border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
-                                        shape = RoundedCornerShape(0.dp)
-                                    ),
-                                    focusedBorder = Border(
-                                        border = BorderStroke(2.dp, Color.White),
-                                        shape = RoundedCornerShape(0.dp)
-                                    )
-                                ),
-                                shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp))
-                            ) { Text("Auto") }
-                            resolutions.forEach { res ->
-                                val dq = viewModel.downloadedQualities
-                                val isDownloadedRes = "${video.contentId}|${res}" in dq
+                            allQualities.forEach { res ->
+                                val label = res ?: "Auto"
+                                val isSelected = if (res == null) chosenResolution == null else chosenResolution == res
+                                val isDownloadedRes = res != null && "${video.contentId}|${res}" in viewModel.downloadedQualities
                                 OutlinedButton(
                                     onClick = { chosenResolution = res },
                                     colors = ButtonDefaults.colors(
                                         containerColor = when {
-                                            chosenResolution == res -> Color(0xFF34495E)
+                                            isSelected -> Color(0xFF34495E)
                                             isDownloadedRes -> Color(0xFF1B3A2D)
                                             else -> Color.Transparent
                                         },
                                         contentColor = Color.White,
-                                        focusedContainerColor = if (chosenResolution == res) Color(0xFF46637E) else Color(0xFF2A3644),
+                                        focusedContainerColor = if (isSelected) Color(0xFF46637E) else Color(0xFF2A3644),
                                         focusedContentColor = Color.White
                                     ),
                                     scale = ButtonDefaults.scale(focusedScale = 1.0f),
@@ -1127,9 +1128,10 @@ fun VideoDetailsDialog(
                                             shape = RoundedCornerShape(0.dp)
                                         )
                                     ),
-                                    shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp))
+                                    shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp)),
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text(if (isDownloadedRes) "$res ✓" else res)
+                                    Text(if (isDownloadedRes) "$label ✓" else label)
                                 }
                             }
                         }

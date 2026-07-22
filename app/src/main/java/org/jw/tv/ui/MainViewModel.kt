@@ -149,6 +149,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     var continueWatchingList by mutableStateOf<List<org.jw.tv.data.WatchProgressEntity>>(emptyList())
         private set
+    var watchProgressMap by mutableStateOf<Map<String, Float>>(emptyMap())
+        private set
 
     var favoritesList by mutableStateOf<List<org.jw.tv.data.FavoriteEntity>>(emptyList())
         private set
@@ -246,6 +248,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             mediaDao.getWatchProgressFlow().collect { list ->
                 continueWatchingList = list
+                watchProgressMap = list.map { it.contentId to (if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs.toFloat() else 0f) }.toMap()
             }
         }
         // Observe Room Favorites
