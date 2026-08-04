@@ -1,13 +1,14 @@
 # JW TV
 
 [![Platform](https://img.shields.io/badge/platform-Android%20TV-FF0033?style=flat-square)](https://github.com/madroots/jwtv)
-[![Min SDK](https://img.shields.io/badge/minSdk-21-FF0033?style=flat-square)]()
-[![Target SDK](https://img.shields.io/badge/targetSdk-35-FF0033?style=flat-square)]()
+[![Latest Release](https://img.shields.io/github/v/release/madroots/jwtv?style=flat-square&color=FF0033)](https://github.com/madroots/jwtv/releases)
 [![License](https://img.shields.io/badge/license-Apache%202.0-FF0033?style=flat-square)](LICENSE)
 
 An Android TV application for browsing and watching videos from the JW.org media library with a native TV interface.
 
-![JW TV Android TV Screenshot](screenshots/jwtv_android_tv.png)
+<p align="center">
+  <img src="screenshots/jwtv_android_tv.png" alt="JW TV Android TV Screenshot" width="800" />
+</p>
 
 ## Features
 
