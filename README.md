@@ -12,7 +12,7 @@ An Android TV application for browsing and watching videos from the JW.org media
 Install directly on your Android TV using **AFTV News Downloader**:
 
 1. Open **AFTV News Downloader** on your TV
-2. Enter code: **`3971590`**
+2. Enter code: **`4641922`**
 3. Download and install
 
 Alternatively, grab the latest APK from the [Releases](https://github.com/madroots/jwtv/releases) page.
