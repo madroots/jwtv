@@ -13,8 +13,8 @@ import java.io.File
 import java.io.FileOutputStream
 
 object UpdateManager {
-    const val UPDATE_VERSION_URL = "https://plugins.best-web.sk/random/jwtv/version.txt"
-    const val UPDATE_APK_URL = "https://plugins.best-web.sk/random/jwtv/app-debug.apk"
+    const val UPDATE_VERSION_URL = "https://github.com/madroots/jwtv/releases/latest/download/version.txt"
+    const val UPDATE_APK_URL = "https://github.com/madroots/jwtv/releases/latest/download/app-debug.apk"
     private val downloadClient by lazy {
         MediatorClient.client.newBuilder()
             .callTimeout(0, java.util.concurrent.TimeUnit.SECONDS)
