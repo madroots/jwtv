@@ -3,7 +3,7 @@
 [![Platform](https://img.shields.io/badge/platform-Android%20TV-FF0033?style=flat-square)](https://github.com/madroots/jwtv)
 [![Min SDK](https://img.shields.io/badge/minSdk-21-FF0033?style=flat-square)]()
 [![Target SDK](https://img.shields.io/badge/targetSdk-35-FF0033?style=flat-square)]()
-[![License](https://img.shields.io/badge/license-Personal%20Use-FF0033?style=flat-square)]()
+[![License](https://img.shields.io/badge/license-Apache%202.0-FF0033?style=flat-square)](LICENSE)
 
 An Android TV application for browsing and watching videos from the JW.org media library with a native TV interface.
 
@@ -35,3 +35,16 @@ Alternatively, grab the latest APK from the [Releases](https://github.com/madroo
 ## Disclaimer
 
 This project is for **personal and educational use only**. It is not affiliated with, endorsed by, or connected to Jehovah's Witnesses in any way. All media content is property of Jehovah's Witnesses and is accessed through their public API.
+
+
+## Self-Updates & Customization
+
+The application includes a built-in update check mechanism. By default, it checks for updates from:
+- Version check URL: defined by `UpdateManager.UPDATE_VERSION_URL`
+- APK download URL: defined by `UpdateManager.UPDATE_APK_URL`
+
+If you fork or redistribute this application, you can configure these constants in `app/src/main/java/org/jw/tv/ui/UpdateManager.kt` to point to your own host server, or disable update checks in `MainActivity.kt`.
+
+## License
+
+This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.

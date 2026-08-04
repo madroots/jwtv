@@ -377,7 +377,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (manual) updateCheckMessage = "Checking for updates..."
             try {
                 val ts = System.currentTimeMillis()
-                val url = "https://plugins.best-web.sk/random/jwtv/version.txt?t=$ts"
+                val url = "${UpdateManager.UPDATE_VERSION_URL}?t=$ts"
                 val result = withContext(Dispatchers.IO) {
                     val req = okhttp3.Request.Builder().url(url).build()
                     MediatorClient.client.newCall(req).execute().use { resp ->
@@ -390,7 +390,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     result > currentVersion -> {
                         updateAvailable = true
                         updateDialogDismissed = false
-                        updateApkUrl = "https://plugins.best-web.sk/random/jwtv/app-debug.apk?t=$ts"
+                        updateApkUrl = "${UpdateManager.UPDATE_APK_URL}?t=$ts"
                         updateCheckMessage = null
                     }
                     else ->
