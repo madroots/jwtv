@@ -9,6 +9,15 @@ An Android TV application for browsing and watching videos from the JW.org media
 
 ![JW TV Android TV Screenshot](screenshots/jwtv_android_tv.png)
 
+## Features
+
+- **Browse JW Library** — Explore video categories (Studio, Children, Family, Bible, Movies, Series, etc.)
+- **Video Playback** — Stream with resolution selection (up to 2160p)
+- **Download & Offline** — Save videos to your device for offline playback
+- **Watch Progress** — Resume videos from where you left off with visual progress indicators
+- **Favorites** — Save videos to a personal list
+- **Language Support** — Select from 100+ languages available on JW.org
+
 ## Download
 
 Install directly on your Android TV using **AFTV News Downloader**:
@@ -19,34 +28,11 @@ Install directly on your Android TV using **AFTV News Downloader**:
 
 Alternatively, grab the latest APK from the [Releases](https://github.com/madroots/jwtv/releases) page.
 
-## Features
-
-- **Browse JW Library** — Explore video categories (Studio, Children, Family, Bible, Movies, Series, etc.)
-- **Video Playback** — Stream with resolution selection (up to 2160p)
-- **Download & Offline** — Save videos to your device for offline playback
-- **Watch Progress** — Resume videos from where you left off with visual progress indicators
-- **Favorites** — Save videos to a personal list
-- **Language Support** — Select from 100+ languages available on JW.org
-- **Auto-Update** — Built-in update checker downloads and installs new versions directly on your TV
-
-## Requirements
-
-- **Android TV** device running Android 7.0 (API 24) or later
-- Network connection for streaming
-
 ## Disclaimer
 
 This project is for **personal and educational use only**. It is not affiliated with, endorsed by, or connected to Jehovah's Witnesses in any way. All media content is property of Jehovah's Witnesses and is accessed through their public API.
 
-
-## Self-Updates & Customization
-
-The application includes a built-in update check mechanism. By default, it checks for updates from:
-- Version check URL: defined by `UpdateManager.UPDATE_VERSION_URL`
-- APK download URL: defined by `UpdateManager.UPDATE_APK_URL`
-
-If you fork or redistribute this application, you can configure these constants in `app/src/main/java/org/jw/tv/ui/UpdateManager.kt` to point to your own host server, or disable update checks in `MainActivity.kt`.
-
 ## License
 
 This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
+
