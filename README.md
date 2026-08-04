@@ -7,6 +7,8 @@
 
 An Android TV application for browsing and watching videos from the JW.org media library with a native TV interface.
 
+![JW TV Android TV Screenshot](screenshots/jwtv_android_tv.png)
+
 ## Download
 
 Install directly on your Android TV using **AFTV News Downloader**:
