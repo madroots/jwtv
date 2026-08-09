@@ -33,6 +33,9 @@ dependencies {
     // No compose-ui, no androidx.tv — this module stays platform-neutral.
     implementation("androidx.compose.runtime:runtime:1.6.8")
 
+    // Coil — api: createAppImageLoader returns coil.ImageLoader to consumers.
+    api("io.coil-kt:coil:2.6.0")
+
     // OkHttp + Serialization.
     // `api` for types that leak into consumer compile classpaths:
     // app UI calls MediatorClient.json (kotlinx.serialization.json.Json) and

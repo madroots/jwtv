@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 rootProject.name = "jw_tv"
 include(":app")
 include(":core")
+include(":app-phone")
