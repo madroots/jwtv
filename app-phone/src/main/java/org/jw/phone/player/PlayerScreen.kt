@@ -93,13 +93,11 @@ fun PlayerScreen(
     val context = LocalContext.current
     val activity = LocalContext.current as? android.app.Activity
 
-    // Landscape fullscreen on play; restore portrait when leaving.
-    DisposableEffect(Unit) {
-        activity?.let { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
-        onDispose {
-            activity?.let { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
-        }
-    }
+    // NOTE: no forced orientation here. Playback starts in portrait (like the
+    // inline layout); the user goes fullscreen via the rotate button. Forcing
+    // landscape on entry + portrait on exit raced the pop-back composition and
+    // left Home measuring with stale landscape constraints (blank screen) —
+    // verified and fixed by removing the forced config changes entirely.
 
     BackHandler { onBack() }
 

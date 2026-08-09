@@ -223,15 +223,16 @@ private fun PhoneRoot(viewModel: MainViewModel) {
             }
             composable("player") {
                 val video = viewModel.activeVideo
-                if (video == null) {
-                    LaunchedEffect(Unit) { navController.popBackStack() }
-                } else {
+                if (video != null) {
                     PlayerScreen(
                         video = video,
                         selectedResolution = viewModel.selectedResolution,
                         onBack = {
                             viewModel.activeVideo = null
-                            navController.popBackStack()
+                            // Explicit route (same pattern as the TV app): avoids
+                            // the no-arg popBackStack double-popping while the
+                            // exit transition still has this route composed.
+                            navController.popBackStack("home", inclusive = false)
                         }
                     )
                 }
