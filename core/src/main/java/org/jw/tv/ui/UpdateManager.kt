@@ -13,8 +13,40 @@ import java.io.File
 import java.io.FileOutputStream
 
 object UpdateManager {
-    const val UPDATE_VERSION_URL = "https://github.com/madroots/jwtv/releases/latest/download/version.txt"
-    const val UPDATE_APK_URL = "https://github.com/madroots/jwtv/releases/latest/download/app-release.apk"
+    // ── Platform update endpoints ────────────────────────────────────────────
+    // Both apps self-update from GitHub release assets. Each release must carry
+    // BOTH pairs of artifacts or `releases/latest` 404s for the missing one:
+    //   TV:    version.txt        (int = TV versionCode) + app-release.apk
+    //   Phone: version-phone.txt  (int = phone versionCode) + app-phone-release.apk
+    //
+    // TV defaults are the historical constants — :app's flow is byte-identical
+    // unless configure() is called. The phone app calls configure() with its
+    // own endpoints at startup (JwPhoneApp), so an old TV build can never
+    // receive a phone APK and vice versa.
+    private const val TV_VERSION_URL =
+        "https://github.com/madroots/jwtv/releases/latest/download/version.txt"
+    private const val TV_APK_URL =
+        "https://github.com/madroots/jwtv/releases/latest/download/app-release.apk"
+
+    const val PHONE_VERSION_URL =
+        "https://github.com/madroots/jwtv/releases/latest/download/version-phone.txt"
+    const val PHONE_APK_URL =
+        "https://github.com/madroots/jwtv/releases/latest/download/app-phone-release.apk"
+
+    @Volatile
+    var versionUrl: String = TV_VERSION_URL
+        private set
+
+    @Volatile
+    var apkUrl: String = TV_APK_URL
+        private set
+
+    /** Switches the update channel. Safe to call once at app startup. */
+    fun configure(platformVersionUrl: String, platformApkUrl: String) {
+        versionUrl = platformVersionUrl
+        apkUrl = platformApkUrl
+    }
+
     private val downloadClient by lazy {
         MediatorClient.client.newBuilder()
             .callTimeout(0, java.util.concurrent.TimeUnit.SECONDS)

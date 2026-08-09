@@ -22,9 +22,11 @@ android {
 
     buildTypes {
         release {
-            // Scaffold phase: minify/shrinker decision + signing config land
-            // with the distribution work (issue #7).
+            // Minify/shrinker stays off for now; signed with the debug key so
+            // the release artifact is installable via the self-update channel
+            // (issue #7) — mirrors :app, which also signs release with debug.
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
