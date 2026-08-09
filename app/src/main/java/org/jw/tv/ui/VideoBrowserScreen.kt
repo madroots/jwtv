@@ -1802,13 +1802,8 @@ fun ManageDownloadsDialog(
     }
 }
 // ── Utilities ────────────────────────────────────────────────────────────────
-fun formatDuration(durationSeconds: Double?): String {
-    if (durationSeconds == null || durationSeconds <= 0) return ""
-    val total = durationSeconds.toInt()
-    val h = total / 3600; val m = (total % 3600) / 60; val s = total % 60
-    return if (h > 0) String.format("%d:%02d:%02d", h, m, s)
-    else String.format("%02d:%02d", m, s)
-}
+// formatDuration moved to :core (org.jw.tv.ui.UiFormat) — same package, so all
+// call sites in this file and VideoPlayerScreen compile unchanged.
 
 fun getCategoryIcon(key: String): ImageVector = when (key) {
     "VODStudio"            -> Icons.Filled.Tv
