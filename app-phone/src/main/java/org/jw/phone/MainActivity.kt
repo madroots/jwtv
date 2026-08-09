@@ -42,6 +42,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import org.jw.phone.player.PlayerScreen
 import org.jw.phone.ui.CategoriesScreen
 import org.jw.phone.ui.CategoryScreen
 import org.jw.phone.ui.DownloadsScreen
@@ -211,11 +212,17 @@ private fun PhoneRoot(viewModel: MainViewModel) {
                 DownloadsScreen(viewModel = viewModel)
             }
             composable("player") {
-                // Real touch player lands in issue #4.
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        "Player — arrives with issue #4",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                val video = viewModel.activeVideo
+                if (video == null) {
+                    LaunchedEffect(Unit) { navController.popBackStack() }
+                } else {
+                    PlayerScreen(
+                        video = video,
+                        selectedResolution = viewModel.selectedResolution,
+                        onBack = {
+                            viewModel.activeVideo = null
+                            navController.popBackStack()
+                        }
                     )
                 }
             }
