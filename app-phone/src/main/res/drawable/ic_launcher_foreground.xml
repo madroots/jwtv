@@ -1,0 +1,11 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- White play triangle, same glyph as the TV app_logo (256-space path
+         scaled by 108/256 ≈ 0.4219), centered in the adaptive safe zone. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40.5,30.4 L76,54 L40.5,77.6 Z" />
+</vector>

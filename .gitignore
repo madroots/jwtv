@@ -6,6 +6,7 @@
 /build
 /app/build
 /core/build
+/app-phone/build
 /captures
 .externalNativeBuild
 .cxx
