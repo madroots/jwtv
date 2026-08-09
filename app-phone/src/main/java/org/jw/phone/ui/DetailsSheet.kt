@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,6 +25,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -78,44 +80,54 @@ fun VideoDetailsSheet(
         }
     }
 
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = MaterialTheme.colorScheme.surface,
+        sheetState = sheetState
     ) {
+        // Bounded height so the action row below is ALWAYS visible — the
+        // details scroll inside their own area instead of pushing Play Now /
+        // Favorite off-screen (user report: sheet slid up only partway).
         Column(
             Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp)
+                .heightIn(max = 620.dp)
         ) {
-            Box(
+            Column(
                 Modifier
-                    .fillMaxWidth()
-                    .height(170.dp)
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
             ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(video.getThumbnailUrl())
-                        .size(640, 360)
-                        .build(),
-                    contentDescription = video.title,
-                    modifier = Modifier
+                Box(
+                    Modifier
                         .fillMaxWidth()
                         .height(170.dp)
-                        .background(Color(0xFF1A1F27), RoundedCornerShape(4.dp)),
-                    contentScale = ContentScale.Crop
-                )
-            }
-            Spacer(Modifier.height(14.dp))
-            Text(
-                video.title,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+                    ) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(video.getThumbnailUrl())
+                                .size(640, 360)
+                                .build(),
+                            contentDescription = video.title,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(170.dp)
+                                .background(Color(0xFF1A1F27), RoundedCornerShape(4.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        video.title,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
             val dur = formatDuration(video.duration)
             if (dur.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
@@ -176,18 +188,22 @@ fun VideoDetailsSheet(
                 }
             }
 
-            if (viewModel.isDownloadingVideo) {
-                Spacer(Modifier.height(12.dp))
-                LinearProgressIndicator(
-                    progress = { viewModel.videoDownloadProgress },
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = Color(0x66000000),
-                    modifier = Modifier.fillMaxWidth().height(4.dp)
-                )
+                if (viewModel.isDownloadingVideo) {
+                    Spacer(Modifier.height(12.dp))
+                    LinearProgressIndicator(
+                        progress = { viewModel.videoDownloadProgress },
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = Color(0x66000000),
+                        modifier = Modifier.fillMaxWidth().height(4.dp)
+                    )
+                }
             }
 
-            Spacer(Modifier.height(20.dp))
+            // ── Pinned action row: always visible, never below the fold ─────
             Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
