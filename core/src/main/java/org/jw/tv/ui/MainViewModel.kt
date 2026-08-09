@@ -87,9 +87,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var allDownloads by mutableStateOf<List<DownloadEntity>>(emptyList())
         private set
 
+    // Compose snapshot state must only be written from the main thread. These
+    // helpers marshal DB reads onto IO and state writes onto Main — writing
+    // mutableStateOf from a background thread races active compositions and
+    // throws "Reading a state that was created after the snapshot was taken".
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
     fun refreshDownloads() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val all = mediaDao.getAllDownloads()
+        viewModelScope.launch {
+            val all = withContext(Dispatchers.IO) { mediaDao.getAllDownloads() }
             allDownloads = all
             downloadedIds = all.map { it.contentId }.toSet()
             downloadedQualities = all.map { "${it.contentId}|${it.quality}" }.toSet()
@@ -103,7 +109,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val ok = DownloadManager.downloadVideo(
                 app, video, quality, mediaDao,
-                onProgress = { progress -> videoDownloadProgress = progress }
+                // downloadVideo runs on IO; hop to main before touching state.
+                onProgress = { progress ->
+                    mainHandler.post { videoDownloadProgress = progress }
+                }
             )
             isDownloadingVideo = false
             videoDownloadProgress = 0f
@@ -220,7 +229,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val apkFile = UpdateManager.downloadApk(
                 app, apkUrl,
-                onProgress = { progress -> downloadProgress = progress }
+                // downloadApk runs on IO; hop to main before touching state.
+                onProgress = { progress ->
+                    mainHandler.post { downloadProgress = progress }
+                }
             )
             // Dismiss progress overlay before firing install intent — some TV
             // firmware silently drops startActivity() when a Dialog is in front
@@ -244,18 +256,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         loadRootCategories()
         loadLanguages()
         refreshDownloads()
-        // Observe Room Watch Progress
+        // Observe Room Watch Progress — Room emits on its query thread, so
+        // marshal state writes onto main.
         viewModelScope.launch {
             mediaDao.getWatchProgressFlow().collect { list ->
-                continueWatchingList = list
-                watchProgressMap = list.map { it.contentId to (if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs.toFloat() else 0f) }.toMap()
+                withContext(Dispatchers.Main) {
+                    continueWatchingList = list
+                    watchProgressMap = list.map { it.contentId to (if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs.toFloat() else 0f) }.toMap()
+                }
             }
         }
         // Observe Room Favorites
         viewModelScope.launch {
             mediaDao.getFavoritesFlow().collect { list ->
-                favoritesList = list
-                favoriteContentIds = list.map { it.contentId }.toSet()
+                withContext(Dispatchers.Main) {
+                    favoritesList = list
+                    favoriteContentIds = list.map { it.contentId }.toSet()
+                }
             }
         }
     }
