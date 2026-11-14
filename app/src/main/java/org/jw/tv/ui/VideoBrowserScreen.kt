@@ -479,7 +479,9 @@ fun VideoBrowserScreen(
                     Text("Update Available", color = Color.White)
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "v${BuildConfig.VERSION_NAME} → v3.9.1",
+                        viewModel.updateVersionName
+                            ?.let { "v${BuildConfig.VERSION_NAME} → v$it" }
+                            ?: "Current: v${BuildConfig.VERSION_NAME}",
                         color = Color(0xFF8B949E),
                         fontSize = 13.sp
                     )
@@ -492,26 +494,24 @@ fun VideoBrowserScreen(
                         color = Color.LightGray,
                         fontSize = 14.sp
                     )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        "What's new in this update:",
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "• Full download support (save videos to device)\n" +
-                        "• Default quality setting\n" +
-                        "• Redesigned Settings menu\n" +
-                        "• Language picker moved to Settings\n" +
-                        "• Simplified sidebar layout\n" +
-                        "• Zero border radius on all elements\n" +
-                        "• Bug fixes & performance improvements",
-                        color = Color(0xFFB0BEC5),
-                        fontSize = 12.sp,
-                        lineHeight = 20.sp
-                    )
+                    viewModel.updateNotes?.let { notes ->
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "What's new in this update:",
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            notes,
+                            color = Color(0xFFB0BEC5),
+                            fontSize = 12.sp,
+                            lineHeight = 20.sp,
+                            maxLines = 10,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             },
             confirmButton = {

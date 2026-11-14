@@ -8,6 +8,7 @@ import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Request
+import org.jw.tv.api.GithubRelease
 import org.jw.tv.api.MediatorClient
 import java.io.File
 import java.io.FileOutputStream
@@ -33,6 +34,12 @@ object UpdateManager {
     const val PHONE_APK_URL =
         "https://github.com/madroots/jwtv/releases/latest/download/app-phone-release.apk"
 
+    // Shared by both channels: version name + release notes for the dialog.
+    // Detection itself stays on the version files so already-installed builds
+    // keep working unchanged.
+    private const val LATEST_RELEASE_API_URL =
+        "https://api.github.com/repos/madroots/jwtv/releases/latest"
+
     @Volatile
     var versionUrl: String = TV_VERSION_URL
         private set
@@ -45,6 +52,25 @@ object UpdateManager {
     fun configure(platformVersionUrl: String, platformApkUrl: String) {
         versionUrl = platformVersionUrl
         apkUrl = platformApkUrl
+    }
+
+    /** Latest release metadata, or null if GitHub is unreachable/rate-limited. */
+    suspend fun fetchLatestRelease(): GithubRelease? = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url(LATEST_RELEASE_API_URL)
+                .header("Accept", "application/vnd.github+json")
+                .build()
+            MediatorClient.client.newCall(request).execute().use { response ->
+                val body = response.body?.string()
+                if (response.isSuccessful && body != null) {
+                    MediatorClient.json.decodeFromString<GithubRelease>(body)
+                } else null
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
     }
 
     private val downloadClient by lazy {

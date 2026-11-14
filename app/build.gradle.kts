@@ -11,8 +11,11 @@ android {
         applicationId = "org.jw.tv"
         minSdk = 21
         targetSdk = 35
-        versionCode = 60
-        versionName = "3.9.7"
+        // Local builds use these defaults. Release builds get both values from
+        // the git tag via -PreleaseVersionCode / -PreleaseVersionName
+        // (.github/workflows/release.yml).
+        versionCode = providers.gradleProperty("releaseVersionCode").orNull?.toInt() ?: 60
+        versionName = providers.gradleProperty("releaseVersionName").orNull ?: "3.9.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

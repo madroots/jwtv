@@ -40,6 +40,15 @@ Install directly on your Android TV using **AFTV News Downloader**:
 Alternatively, grab the latest APK from the [Releases](https://github.com/madroots/jwtv/releases) page.
 
 
+## Releasing
+
+Publish a GitHub release with a tag like `v3.9.8` (web UI or `gh release create v3.9.8 --generate-notes`). The [Release workflow](.github/workflows/release.yml) builds both apps and attaches `app-release.apk`, `app-phone-release.apk`, `version.txt` and `version-phone.txt`. Installed apps check on launch and offer the update, showing the release notes.
+
+- The tag sets the version: `vX.Y.Z` → versionName `X.Y.Z`, versionCode `X*10000 + Y*100 + Z`. Each tag must be higher than the last.
+- Pre-releases build too, but apps never see them, so use them to test the pipeline.
+- Signing uses the `RELEASE_KEYSTORE_B64` repository secret (base64 keystore). It must stay the same key, or installed apps cannot update.
+
+
 ## Disclaimer
 
 This project is for **personal and educational use only**. It is not affiliated with, endorsed by, or connected to Jehovah's Witnesses in any way. All media content is property of Jehovah's Witnesses and is accessed through their public API.
