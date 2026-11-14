@@ -456,6 +456,18 @@ fun VideoPlayerScreen(
                     descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
                 }
             },
+            // Lift subtitles above the control bar while it's shown, so they
+            // aren't hidden behind the buttons and seek bar. JW subtitle cues
+            // carry their own line position (line:90%), which ignores
+            // SubtitleView's bottom padding, so move the whole view instead.
+            update = { playerView ->
+                playerView.subtitleView?.let { subtitles ->
+                    subtitles.animate()
+                        .translationY(if (showControls) -0.23f * playerView.height else 0f)
+                        .setDuration(200)
+                        .start()
+                }
+            },
             modifier = Modifier.fillMaxSize()
         )
 
