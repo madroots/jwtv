@@ -75,6 +75,24 @@ object MediatorClient {
         }
     }
 
+    // ── Single media item (one language version of a video) ────────────────
+
+    /** The [languageCode] version of the video identified by [languageAgnosticKey]. */
+    suspend fun fetchMediaItem(languageCode: String, languageAgnosticKey: String): MediaItem? =
+        withContext(Dispatchers.IO) {
+            val url = "$BASE_URL/media-items/$languageCode/$languageAgnosticKey"
+            try {
+                client.newCall(Request.Builder().url(url).build()).execute().use { response ->
+                    if (!response.isSuccessful) return@withContext null
+                    val body = response.body?.string() ?: return@withContext null
+                    json.decodeFromString<MediaItemsResponse>(body).media.firstOrNull()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
+        }
+
     // ── Languages ───────────────────────────────────────────────────────────
 
     suspend fun fetchLanguages(languageCode: String = "E"): LanguageResponse? =

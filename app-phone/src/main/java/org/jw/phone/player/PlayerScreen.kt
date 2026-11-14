@@ -78,6 +78,11 @@ import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 import org.jw.tv.api.MediaItem
 import org.jw.tv.data.WatchProgressStore
+import org.jw.tv.api.LanguageInfo
+import org.jw.tv.api.SubtitleLookup
+import org.jw.tv.ui.MainViewModel
+import kotlinx.coroutines.withTimeoutOrNull
+import androidx.compose.foundation.layout.heightIn
 
 /**
  * Phone video player — touch port of the TV player. Landscape fullscreen on
@@ -93,7 +98,16 @@ fun PlayerScreen(
     selectedResolution: String?,
     onBack: () -> Unit,
     /** Where to start, from the ViewModel: 0 for Start over, else the resume position. */
-    startPositionMs: Long = 0L
+    startPositionMs: Long = 0L,
+    /** Library language [video] was fetched in (its own subtitles are in this language). */
+    videoLanguage: String = "E",
+    /** All languages, for names in the subtitle picker. */
+    languages: List<LanguageInfo> = emptyList(),
+    /** Remembered choice: null = original, [MainViewModel.SUBTITLES_OFF], or a language code. */
+    subtitleLanguage: String? = null,
+    onSubtitleLanguageChange: (String?) -> Unit = {},
+    /** Recently picked subtitle languages, listed first in the picker. */
+    recentSubtitleLanguages: List<String> = emptyList()
 ) {
     val context = LocalContext.current
     val activity = LocalContext.current as? android.app.Activity
@@ -113,15 +127,34 @@ fun PlayerScreen(
         mutableStateOf(resolvePlaybackUrl(context, video, currentResolution))
     }
 
+    // ── Subtitles: the video's own, off, or another language version's file ──
+    val ownSubtitleUrl = remember(video) { video.subtitleUrl }
+    val otherSubtitleLanguages = remember(video, languages, recentSubtitleLanguages) {
+        SubtitleLookup.otherLanguages(video, videoLanguage, languages, recentSubtitleLanguages)
+    }
+    val languageNames = remember(languages) { languages.associate { it.code to it.vernacular } }
+    var subtitleChoice by remember {
+        mutableStateOf(
+            subtitleLanguage.takeUnless {
+                it == videoLanguage || (it != MainViewModel.SUBTITLES_OFF && it !in video.availableLanguages.orEmpty())
+            }
+        )
+    }
+    var subtitleChoiceByUser by remember { mutableStateOf(false) }
+    var activeSubtitleUrl by remember { mutableStateOf<String?>(null) }
+    var subtitleResolved by remember { mutableStateOf(false) }
+
     var isBuffering by remember { mutableStateOf(true) }
     var playerError by remember { mutableStateOf<String?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
     var currentPosition by remember { mutableStateOf(0L) }
     var duration by remember { mutableStateOf(0L) }
-    var subtitlesEnabled by remember { mutableStateOf(true) }
     var showControls by remember { mutableStateOf(true) }
     var showQualityDialog by remember { mutableStateOf(false) }
-    var showResumeToast by remember { mutableStateOf(savedProgress > 0L) }
+    var showSubtitleDialog by remember { mutableStateOf(false) }
+    var notice by remember {
+        mutableStateOf(if (savedProgress > 0L) "Resumed from ${formatProgressTime(savedProgress)}" else null)
+    }
     var isSeeking by remember { mutableStateOf(false) }
     var dragPosition by remember { mutableStateOf(0L) }
 
@@ -135,26 +168,40 @@ fun PlayerScreen(
                 true // handle audio focus — phone behavior (TV doesn't)
             )
             .build()
-            .apply {
-                setMediaItem(buildMedia3Item(video, videoUrl))
-                prepare()
-                if (savedProgress > 0L) seekTo(savedProgress)
-                playWhenReady = true
-            }
     }
 
-    // Dynamic resolution switching — same as TV player.
-    LaunchedEffect(videoUrl) {
-        if (videoUrl.isNotEmpty() &&
-            exoPlayer.currentMediaItem?.localConfiguration?.uri?.toString() != videoUrl
-        ) {
-            val currentPos = exoPlayer.currentPosition
-            val wasPlaying = exoPlayer.isPlaying
-            exoPlayer.setMediaItem(buildMedia3Item(video, videoUrl))
-            exoPlayer.prepare()
-            if (currentPos > 0L) exoPlayer.seekTo(currentPos)
-            exoPlayer.playWhenReady = wasPlaying
+    // Resolve the subtitle file for the current choice (foreign: one cached
+    // API request; playback waits for it, at most 3 s).
+    LaunchedEffect(subtitleChoice) {
+        val choice = subtitleChoice
+        activeSubtitleUrl = when (choice) {
+            MainViewModel.SUBTITLES_OFF -> null
+            null -> ownSubtitleUrl
+            else -> withTimeoutOrNull(3_000) { SubtitleLookup.subtitleUrl(video, choice) } ?: run {
+                if (subtitleChoiceByUser) {
+                    notice = "No ${languageNames[choice] ?: choice} subtitles for this video"
+                }
+                ownSubtitleUrl
+            }
         }
+        subtitleResolved = true
+    }
+
+    // (Re)load when the source or subtitle file changes, keeping the position;
+    // the first load starts at the resume point.
+    LaunchedEffect(videoUrl, activeSubtitleUrl, subtitleResolved) {
+        if (!subtitleResolved || videoUrl.isEmpty()) return@LaunchedEffect
+        val current = exoPlayer.currentMediaItem?.localConfiguration
+        val firstLoad = current == null
+        if (!firstLoad &&
+            current!!.uri.toString() == videoUrl &&
+            current.subtitleConfigurations.firstOrNull()?.uri?.toString() == activeSubtitleUrl
+        ) return@LaunchedEffect
+        val position = if (firstLoad) savedProgress else exoPlayer.currentPosition
+        val play = firstLoad || exoPlayer.playWhenReady
+        exoPlayer.setMediaItem(buildMedia3Item(videoUrl, activeSubtitleUrl), position)
+        exoPlayer.prepare()
+        exoPlayer.playWhenReady = play
     }
 
     fun saveProgress() {
@@ -224,10 +271,10 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(showResumeToast) {
-        if (showResumeToast) {
+    LaunchedEffect(notice) {
+        if (notice != null) {
             delay(3000)
-            showResumeToast = false
+            notice = null
         }
     }
 
@@ -282,7 +329,7 @@ fun PlayerScreen(
                 currentPosition = currentPosition,
                 duration = duration,
                 dragPosition = dragPosition,
-                subtitlesEnabled = subtitlesEnabled,
+                subtitlesEnabled = activeSubtitleUrl != null,
                 midPx = midPx,
                 onToggleControls = { showControls = !showControls },
                 onDoubleTapSeek = ::seekBy,
@@ -298,13 +345,7 @@ fun PlayerScreen(
                 onTogglePlay = ::togglePlay,
                 onBack = onBack,
                 onOpenQuality = { showQualityDialog = true },
-                onToggleSubtitles = {
-                    subtitlesEnabled = !subtitlesEnabled
-                    exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
-                        .buildUpon()
-                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesEnabled)
-                        .build()
-                },
+                onOpenSubtitles = { showSubtitleDialog = true },
                 onEnterPip = ::enterPip,
                 onRotateToPortrait = {
                     activity?.let { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
@@ -318,7 +359,7 @@ fun PlayerScreen(
                 currentPosition = currentPosition,
                 duration = duration,
                 dragPosition = dragPosition,
-                subtitlesEnabled = subtitlesEnabled,
+                subtitlesEnabled = activeSubtitleUrl != null,
                 midPx = midPx,
                 onDoubleTapSeek = ::seekBy,
                 onSeek = { pos ->
@@ -333,13 +374,7 @@ fun PlayerScreen(
                 onTogglePlay = ::togglePlay,
                 onBack = onBack,
                 onOpenQuality = { showQualityDialog = true },
-                onToggleSubtitles = {
-                    subtitlesEnabled = !subtitlesEnabled
-                    exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
-                        .buildUpon()
-                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesEnabled)
-                        .build()
-                },
+                onOpenSubtitles = { showSubtitleDialog = true },
                 onEnterPip = ::enterPip,
                 onRotateToLandscape = {
                     activity?.let { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
@@ -354,7 +389,7 @@ fun PlayerScreen(
             )
         }
 
-        if (showResumeToast) {
+        notice?.let { message ->
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -362,11 +397,7 @@ fun PlayerScreen(
                     .background(Color.Black.copy(alpha = 0.8f), shape = RoundedCornerShape(8.dp))
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                Text(
-                    text = "Resumed from ${formatProgressTime(savedProgress)}",
-                    color = Color.White,
-                    fontSize = 14.sp
-                )
+                Text(text = message, color = Color.White, fontSize = 14.sp)
             }
         }
 
@@ -407,6 +438,21 @@ fun PlayerScreen(
             onDismiss = { showQualityDialog = false }
         )
     }
+
+    if (showSubtitleDialog) {
+        SubtitleDialog(
+            ownLabel = ownSubtitleUrl?.let { languageNames[videoLanguage] ?: "Original" },
+            otherLanguages = otherSubtitleLanguages,
+            selected = subtitleChoice,
+            onSelect = { code ->
+                subtitleChoiceByUser = true
+                subtitleChoice = code
+                onSubtitleLanguageChange(code)
+                showSubtitleDialog = false
+            },
+            onDismiss = { showSubtitleDialog = false }
+        )
+    }
 }
 
 // ── Landscape: fullscreen video + overlay controls ──────────────────────────
@@ -429,7 +475,7 @@ private fun LandscapePlayerLayout(
     onTogglePlay: () -> Unit,
     onBack: () -> Unit,
     onOpenQuality: () -> Unit,
-    onToggleSubtitles: () -> Unit,
+    onOpenSubtitles: () -> Unit,
     onEnterPip: () -> Unit,
     onRotateToPortrait: () -> Unit
 ) {
@@ -512,7 +558,7 @@ private fun LandscapePlayerLayout(
                                 IconButton(onClick = onOpenQuality) {
                                     Text("Quality", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                 }
-                                IconButton(onClick = onToggleSubtitles) {
+                                IconButton(onClick = onOpenSubtitles) {
                                     Icon(
                                         Icons.Filled.ClosedCaption,
                                         contentDescription = "Subtitles",
@@ -570,7 +616,7 @@ private fun PortraitPlayerLayout(
     onTogglePlay: () -> Unit,
     onBack: () -> Unit,
     onOpenQuality: () -> Unit,
-    onToggleSubtitles: () -> Unit,
+    onOpenSubtitles: () -> Unit,
     onEnterPip: () -> Unit,
     onRotateToLandscape: () -> Unit
 ) {
@@ -628,7 +674,7 @@ private fun PortraitPlayerLayout(
                     IconButton(onClick = onOpenQuality) {
                         Text("Quality", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
-                    IconButton(onClick = onToggleSubtitles) {
+                    IconButton(onClick = onOpenSubtitles) {
                         Icon(
                             Icons.Filled.ClosedCaption,
                             contentDescription = "Subtitles",
@@ -783,4 +829,44 @@ private fun QualityRow(label: String, selected: Boolean, onClick: () -> Unit) {
             modifier = Modifier.padding(12.dp)
         )
     }
+}
+
+/** Off, the video's own language ([ownLabel], if it has subtitles), then other languages. */
+@Composable
+private fun SubtitleDialog(
+    ownLabel: String?,
+    otherLanguages: List<LanguageInfo>,
+    selected: String?,
+    onSelect: (String?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Subtitles", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+        text = {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)
+            ) {
+                item { QualityRow("Off", selected == MainViewModel.SUBTITLES_OFF) { onSelect(MainViewModel.SUBTITLES_OFF) } }
+                if (ownLabel != null) {
+                    item { QualityRow("$ownLabel (video's own)", selected == null) { onSelect(null) } }
+                }
+                items(otherLanguages, key = { it.code }) { language ->
+                    val label = if (language.name != language.vernacular) "${language.vernacular} · ${language.name}"
+                                else language.vernacular
+                    QualityRow(label, selected == language.code) { onSelect(language.code) }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent)) {
+                Text("Cancel", color = Color.White)
+            }
+        },
+        containerColor = Color(0xFF1E1E1E),
+        titleContentColor = Color.White,
+        textContentColor = Color.LightGray
+    )
 }

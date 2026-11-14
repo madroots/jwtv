@@ -64,6 +64,11 @@ class MainActivity : ComponentActivity() {
                             selectedResolution = viewModel.selectedResolution,
                             // Read once per video, not on every Continue Watching update.
                             startPositionMs = remember(video) { viewModel.startPositionMs(video) },
+                            videoLanguage = viewModel.selectedLanguageCode,
+                            languages = viewModel.languagesList,
+                            subtitleLanguage = viewModel.subtitleLanguage,
+                            onSubtitleLanguageChange = viewModel::updateSubtitleLanguage,
+                            recentSubtitleLanguages = viewModel.recentSubtitleLanguages,
                             onBack = {
                                 viewModel.activeVideo = null
                                 navController.popBackStack("browser", inclusive = false)

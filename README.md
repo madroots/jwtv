@@ -26,6 +26,8 @@ An Android TV application for browsing and watching videos from the JW.org media
 
 - **Language Support** — Select from 100+ languages available on JW.org
 
+- **Subtitles in any language** — Show subtitles from any other language version of a video (e.g. Spanish subtitles on an English video); the choice is remembered
+
 
 ## Download
 
