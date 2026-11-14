@@ -1,6 +1,5 @@
 package org.jw.tv.ui
 
-import android.content.Context
 import android.net.Uri
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
@@ -68,6 +67,7 @@ import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jw.tv.api.MediaItem
+import org.jw.tv.data.WatchProgressStore
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -94,25 +94,13 @@ fun VideoPlayerScreen(
     video: MediaItem,
     selectedResolution: String?,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Where to start, from the ViewModel: 0 for Start over, else the resume position. */
+    startPositionMs: Long = 0L
 ) {
     val context = LocalContext.current
 
-    val sharedPrefs = remember {
-        context.getSharedPreferences("jw_tv_prefs", Context.MODE_PRIVATE)
-    }
-
-    val savedProgress = remember(video.contentId) {
-        val newKey = "progress_${video.contentId}"
-        val oldKey = "progress_${video.title}"
-        if (sharedPrefs.contains(newKey)) {
-            sharedPrefs.getLong(newKey, 0L)
-        } else if (sharedPrefs.contains(oldKey)) {
-            val oldPos = sharedPrefs.getLong(oldKey, 0L)
-            sharedPrefs.edit().putLong(newKey, oldPos).remove(oldKey).apply()
-            oldPos
-        } else 0L
-    }
+    val savedProgress = remember(video.contentId) { startPositionMs }
     var currentResolution by remember { mutableStateOf(selectedResolution) }
 
     // Check for locally downloaded file first — if available, play from local
@@ -145,11 +133,9 @@ fun VideoPlayerScreen(
     var interactionTick by remember { mutableIntStateOf(0) }
     var controlFocus by remember { mutableStateOf(ControlFocus.PlayPause) }
     var focusTick by remember { mutableIntStateOf(0) }
-    // True while a control in the bottom bar holds focus. Otherwise focus is on
-    // the video surface (controls hidden, or just revealed and focus not moved
-    // yet). May stay stale after the overlay leaves composition, so it is only
-    // consulted together with showControls.
-    var overlayFocused by remember { mutableStateOf(false) }
+    // True while the video surface itself (the root, not an overlay control)
+    // holds focus: controls hidden, or just revealed and focus not moved yet.
+    var surfaceFocused by remember { mutableStateOf(false) }
 
     fun buildMediaItem(url: String): Media3Item {
         val builder = Media3Item.Builder().setUri(url)
@@ -187,37 +173,9 @@ fun VideoPlayerScreen(
         }
     }
 
-    /** Persists the resume position (or clears it near the end). */
+    /** Persists the resume position (or clears it when barely started or finished). */
     fun saveProgress() {
-        val currentPos = exoPlayer.currentPosition
-        val totalDuration = exoPlayer.duration
-        if (totalDuration <= 0L) return
-        val progressPercent = currentPos.toFloat() / totalDuration.toFloat()
-        val dao = org.jw.tv.data.AppDatabase.getDatabase(context.applicationContext).mediaDao()
-        if (currentPos > 5000L && progressPercent < 0.95f) {
-            sharedPrefs.edit().putLong("progress_${video.contentId}", currentPos).apply()
-            val jsonStr = try {
-                org.jw.tv.api.MediatorClient.json.encodeToString(MediaItem.serializer(), video)
-            } catch (e: Exception) { "" }
-            val entity = org.jw.tv.data.WatchProgressEntity(
-                contentId = video.contentId,
-                title = video.title,
-                thumbnailUrl = video.getThumbnailUrl(small = true),
-                durationSeconds = video.duration,
-                positionMs = currentPos,
-                durationMs = totalDuration,
-                lastWatchedTimestamp = System.currentTimeMillis(),
-                rawMediaItemJson = jsonStr
-            )
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                dao.saveWatchProgress(entity)
-            }
-        } else {
-            sharedPrefs.edit().remove("progress_${video.contentId}").apply()
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                dao.deleteWatchProgress(video.contentId)
-            }
-        }
+        WatchProgressStore.save(context, video, exoPlayer.currentPosition, exoPlayer.duration)
     }
 
     // Monitor playback state, buffering, and errors; persist progress on exit.
@@ -226,6 +184,9 @@ fun VideoPlayerScreen(
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = playbackState == Player.STATE_BUFFERING
                 duration = exoPlayer.duration.coerceAtLeast(0L)
+                // Finished: leave the player; saving on exit drops it from
+                // Continue Watching.
+                if (playbackState == Player.STATE_ENDED) onBack()
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -253,6 +214,15 @@ fun VideoPlayerScreen(
             duration = exoPlayer.duration.coerceAtLeast(0L)
             if (isPlaying) delay(500)
         } while (isPlaying)
+    }
+
+    // Save the position every 15 s while playing, so a crash or power cut
+    // loses at most that much (exit, Home and pause-on-stop also save).
+    LaunchedEffect(isPlaying) {
+        while (isPlaying) {
+            delay(15_000)
+            saveProgress()
+        }
     }
 
     LaunchedEffect(showResumeToast) {
@@ -394,23 +364,25 @@ fun VideoPlayerScreen(
                     // While focus is on the video surface: Left/Right start
                     // seeking on the seek bar, Center toggles play, Up/Down
                     // just reveal the controls.
-                    Key.DirectionLeft, Key.DirectionRight -> if (!showControls || !overlayFocused) {
+                    Key.DirectionLeft, Key.DirectionRight -> if (!showControls || surfaceFocused) {
                         revealControls(ControlFocus.SeekBar)
                         scrub(keyEvent.key == Key.DirectionRight, keyEvent.repeatCount)
                         true
                     } else false
-                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> if (!showControls || !overlayFocused) {
+                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> if (!showControls || surfaceFocused) {
                         togglePlay()
                         revealControls(ControlFocus.PlayPause)
                         true
                     } else false
-                    Key.DirectionUp, Key.DirectionDown -> if (!showControls || !overlayFocused) {
+                    Key.DirectionUp, Key.DirectionDown -> if (!showControls || surfaceFocused) {
                         revealControls(ControlFocus.PlayPause)
                         true
                     } else false
                     else -> false
                 }
             }
+            // Directly before the focus target: isFocused is the root's own focus.
+            .onFocusChanged { surfaceFocused = it.isFocused }
             .focusRequester(rootFocusRequester)
             .focusable()
     ) {
@@ -469,7 +441,6 @@ fun VideoPlayerScreen(
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .onFocusChanged { overlayFocused = it.hasFocus }
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))))
                     .padding(start = 48.dp, end = 48.dp, top = 72.dp, bottom = 32.dp)
             ) {

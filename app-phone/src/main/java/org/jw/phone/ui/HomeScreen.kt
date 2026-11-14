@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import org.jw.tv.api.MediaItem
-import org.jw.tv.api.MediatorClient
+import org.jw.tv.data.toMediaItem
 import org.jw.tv.ui.MainViewModel
 import org.jw.tv.ui.UiState
 import org.jw.tv.ui.formatDuration
@@ -102,15 +102,7 @@ fun HomeScreen(
                                 ) { progress ->
                                     ContinueWatchingCard(
                                         progress = progress,
-                                        onClick = {
-                                            val mediaItem = try {
-                                                MediatorClient.json.decodeFromString(
-                                                    MediaItem.serializer(),
-                                                    progress.rawMediaItemJson
-                                                )
-                                            } catch (e: Exception) { null }
-                                            if (mediaItem != null) onPlayVideo(mediaItem)
-                                        }
+                                        onClick = { progress.toMediaItem()?.let(onPlayVideo) }
                                     )
                                 }
                             }

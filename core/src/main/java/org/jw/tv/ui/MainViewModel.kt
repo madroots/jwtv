@@ -18,6 +18,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.jw.tv.data.DownloadEntity
+import org.jw.tv.data.WatchProgressStore
 import org.jw.tv.api.CategoryData
 import org.jw.tv.api.LanguageInfo
 import org.jw.tv.api.MediaItem
@@ -38,7 +39,7 @@ data class SubcategoryWithMedia(
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val sharedPrefs =
-        application.getSharedPreferences("jw_tv_prefs", Context.MODE_PRIVATE)
+        application.getSharedPreferences(WatchProgressStore.PREFS_NAME, Context.MODE_PRIVATE)
 
     // ── Language ─────────────────────────────────────────────────────────────
 
@@ -58,7 +59,43 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // ── Playback ─────────────────────────────────────────────────────────────
 
     var selectedResolution by mutableStateOf<String?>(null)
+        private set
     var activeVideo by mutableStateOf<MediaItem?>(null)
+
+    /** True when the current playback should ignore the saved position (Start over). */
+    var playFromStart by mutableStateOf(false)
+        private set
+
+    fun play(video: MediaItem, resolution: String?, fromStart: Boolean = false) {
+        selectedResolution = resolution
+        playFromStart = fromStart
+        activeVideo = video
+    }
+
+    /**
+     * Saved resume position in ms; 0 when the video would start from the
+     * beginning. Falls back to the Continue Watching row so the row, the
+     * details screen and the player always agree.
+     */
+    fun resumePositionMs(video: MediaItem): Long =
+        WatchProgressStore.read(sharedPrefs, video).takeIf { it > 0L }
+            ?: continueWatchingList.firstOrNull { it.contentId == video.contentId }?.positionMs
+            ?: 0L
+
+    /** Where the player should start [video]: 0 for Start over, else the resume position. */
+    fun startPositionMs(video: MediaItem): Long =
+        if (playFromStart) 0L else resumePositionMs(video)
+
+    /** Forgets the resume position and removes the video from Continue Watching. */
+    fun clearWatchProgress(video: MediaItem) =
+        WatchProgressStore.clear(getApplication(), video.contentId)
+
+    /** Quality to preselect: the downloaded one, else the user's default if offered, else Auto. */
+    fun preferredResolution(video: MediaItem): String? {
+        val labels = video.files?.mapNotNull { it.label }?.distinct().orEmpty()
+        return labels.firstOrNull { "${video.contentId}|$it" in downloadedQualities }
+            ?: defaultQuality?.takeIf { it in labels }
+    }
 
     // ── Settings ──────────────────────────────────────────────────────────────
 

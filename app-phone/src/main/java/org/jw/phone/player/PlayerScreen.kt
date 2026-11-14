@@ -77,6 +77,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 import org.jw.tv.api.MediaItem
+import org.jw.tv.data.WatchProgressStore
 
 /**
  * Phone video player — touch port of the TV player. Landscape fullscreen on
@@ -90,7 +91,9 @@ import org.jw.tv.api.MediaItem
 fun PlayerScreen(
     video: MediaItem,
     selectedResolution: String?,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    /** Where to start, from the ViewModel: 0 for Start over, else the resume position. */
+    startPositionMs: Long = 0L
 ) {
     val context = LocalContext.current
     val activity = LocalContext.current as? android.app.Activity
@@ -103,10 +106,7 @@ fun PlayerScreen(
 
     BackHandler { onBack() }
 
-    val sharedPrefs = remember {
-        context.getSharedPreferences(PLAYER_PREFS_NAME, Context.MODE_PRIVATE)
-    }
-    val savedProgress = remember(video.contentId) { readSavedProgress(sharedPrefs, video) }
+    val savedProgress = remember(video.contentId) { startPositionMs }
 
     var currentResolution by remember { mutableStateOf(selectedResolution) }
     var videoUrl by remember(currentResolution) {
@@ -157,12 +157,19 @@ fun PlayerScreen(
         }
     }
 
+    fun saveProgress() {
+        WatchProgressStore.save(context, video, exoPlayer.currentPosition, exoPlayer.duration)
+    }
+
     // Player state listener + progress save on dispose (identical to TV).
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = playbackState == Player.STATE_BUFFERING
                 duration = exoPlayer.duration.coerceAtLeast(0L)
+                // Finished: leave the player; saving on exit drops it from
+                // Continue Watching.
+                if (playbackState == Player.STATE_ENDED) onBack()
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -176,11 +183,7 @@ fun PlayerScreen(
         }
         exoPlayer.addListener(listener)
         onDispose {
-            saveProgressOnExit(
-                context, sharedPrefs, video,
-                positionMs = exoPlayer.currentPosition,
-                durationMs = exoPlayer.duration
-            )
+            saveProgress()
             exoPlayer.removeListener(listener)
             exoPlayer.release()
         }
@@ -192,10 +195,19 @@ fun PlayerScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP && exoPlayer.isPlaying) {
                 exoPlayer.pause()
+                saveProgress()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // Save the position every 15 s while playing (crash / power-cut safety).
+    LaunchedEffect(isPlaying) {
+        while (isPlaying) {
+            delay(15_000)
+            saveProgress()
+        }
     }
 
     // Position polling — paused while the user drags the seek bar.

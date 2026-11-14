@@ -1,44 +1,17 @@
 package org.jw.phone.player
 
 import android.content.Context
-import android.content.SharedPreferences
 import android.net.Uri
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem as Media3Item
 import androidx.media3.common.MimeTypes
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import org.jw.tv.api.MediaItem
-import org.jw.tv.api.MediatorClient
-import org.jw.tv.data.AppDatabase
-import org.jw.tv.data.WatchProgressEntity
 import java.io.File
 
 /**
- * Phone playback helpers. Deliberately duplicated from the TV player
- * (VideoPlayerScreen.kt) rather than extracted to :core: the TV app must stay
- * untouched this phase. Semantics are identical — same SharedPreferences keys,
- * same Room entities, same URL preference order — so behavior matches the TV
- * app exactly. If this duplication is ever extracted, :app must not change.
+ * Phone playback helpers: playback source and Media3 item, same semantics as
+ * the TV player. Resume positions live in :core (WatchProgressStore).
  */
-
-const val PLAYER_PREFS_NAME = "jw_tv_prefs"
-
-/** Reads saved resume position, migrating the legacy title-keyed entry. */
-fun readSavedProgress(sharedPrefs: SharedPreferences, video: MediaItem): Long {
-    val newKey = "progress_${video.contentId}"
-    val oldKey = "progress_${video.title}"
-    return when {
-        sharedPrefs.contains(newKey) -> sharedPrefs.getLong(newKey, 0L)
-        sharedPrefs.contains(oldKey) -> {
-            val oldPos = sharedPrefs.getLong(oldKey, 0L)
-            sharedPrefs.edit().putLong(newKey, oldPos).remove(oldKey).apply()
-            oldPos
-        }
-        else -> 0L
-    }
-}
 
 /**
  * Resolves the playback source: a locally downloaded file wins, otherwise the
@@ -83,45 +56,6 @@ fun buildMedia3Item(video: MediaItem, url: String): Media3Item {
         builder.setSubtitleConfigurations(listOf(subtitleConfig))
     }
     return builder.build()
-}
-
-/**
- * Persists watch progress on player exit — exact TV behavior: >5s played and
- * <95% watched saves (SharedPreferences + Room WatchProgressEntity), otherwise
- * clears the saved progress.
- */
-fun saveProgressOnExit(
-    context: Context,
-    sharedPrefs: SharedPreferences,
-    video: MediaItem,
-    positionMs: Long,
-    durationMs: Long
-) {
-    if (durationMs <= 0L) return
-    val progressPercent = positionMs.toFloat() / durationMs.toFloat()
-    val appContext = context.applicationContext
-    val dao = AppDatabase.getDatabase(appContext).mediaDao()
-    val jsonStr = try {
-        MediatorClient.json.encodeToString(MediaItem.serializer(), video)
-    } catch (e: Exception) { "" }
-
-    if (positionMs > 5000L && progressPercent < 0.95f) {
-        sharedPrefs.edit().putLong("progress_${video.contentId}", positionMs).apply()
-        val entity = WatchProgressEntity(
-            contentId = video.contentId,
-            title = video.title,
-            thumbnailUrl = video.getThumbnailUrl(small = true),
-            durationSeconds = video.duration,
-            positionMs = positionMs,
-            durationMs = durationMs,
-            lastWatchedTimestamp = System.currentTimeMillis(),
-            rawMediaItemJson = jsonStr
-        )
-        CoroutineScope(Dispatchers.IO).launch { dao.saveWatchProgress(entity) }
-    } else {
-        sharedPrefs.edit().remove("progress_${video.contentId}").apply()
-        CoroutineScope(Dispatchers.IO).launch { dao.deleteWatchProgress(video.contentId) }
-    }
 }
 
 fun formatProgressTime(ms: Long): String {
