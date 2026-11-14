@@ -1,6 +1,9 @@
 package org.jw.tv
 
 import android.os.Bundle
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -38,6 +41,14 @@ class MainActivity : ComponentActivity() {
             1
         }
         viewModel.checkForUpdates(versionCode)
+
+        // Full screen: Android TV has no system bars, but Google TV boxes and
+        // other devices running this build can show a status/navigation bar
+        // over the video. A swipe still reveals them temporarily.
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
+        }
 
         setContent {
             val navController = rememberNavController()

@@ -4,51 +4,54 @@
 [![Latest Release](https://img.shields.io/github/v/release/madroots/jwtv?style=flat-square&color=FF0033)](https://github.com/madroots/jwtv/releases)
 [![License](https://img.shields.io/badge/license-Apache%202.0-FF0033?style=flat-square)](LICENSE)
 
-An Android TV application for browsing and watching videos from the JW.org media library with a native TV interface.
-
+Watch the JW.org video library on your TV, with a fast interface made for the remote.
 
 <p align="center">
-  <img src="screenshots/jwtv_android_tv.png" alt="JW TV Android TV Screenshot" width="800" />
+  <img src="screenshots/home.jpg" alt="JW TV home screen" width="800" />
+</p>
+
+
+## Subtitles in any language
+
+Watch any video with subtitles in **any language it's published in**, not just the language of the video. For example, English video with Spanish subtitles, or Spanish video with English subtitles.
+
+Press **CC** in the player and pick from Off, the video's own language, your recent languages, or the full list. Your choice is remembered for the next videos, and you can set it in **Settings** too.
+
+<p align="center">
+  <img src="screenshots/subtitles.jpg" alt="English video with Spanish subtitles" width="49%" />
+  <img src="screenshots/subtitle-picker.jpg" alt="Subtitle language picker" width="49%" />
 </p>
 
 
 ## Features
 
-- **Browse JW Library** — Explore video categories (Studio, Children, Family, Bible, Movies, Series, etc.)
+- **Browse the library**: Studio, Children, Family, Bible, Movies, Series and more
+- **Continue watching**: pick up where you left off, or start over
+- **Downloads**: save videos for offline viewing and manage storage
+- **Quality**: choose the resolution, up to 2160p
+- **Favorites**: keep a personal list
+- **100+ languages**: switch the library language in Settings
+- **Updates itself**: new versions are offered inside the app
 
-- **Video Playback** — Stream with resolution selection (up to 2160p)
-
-- **Download & Offline** — Save videos to your device for offline playback
-
-- **Watch Progress** — Resume videos from where you left off with visual progress indicators
-
-- **Favorites** — Save videos to a personal list
-
-- **Language Support** — Select from 100+ languages available on JW.org
-
-- **Subtitles in any language** — Show subtitles from any other language version of a video (e.g. Spanish subtitles on an English video); the choice is remembered
+<p align="center">
+  <img src="screenshots/details.jpg" alt="Video details with Resume and options" width="800" />
+</p>
 
 
 ## Download
 
-Install directly on your Android TV using **AFTV News Downloader**:
+On your Android TV, open **AFTV News Downloader**, enter code **`4641922`**, then download and install.
 
-1. Open **AFTV News Downloader** on your TV
-
-2. Enter code: **`4641922`**
-
-3. Download and install
-
-Alternatively, grab the latest APK from the [Releases](https://github.com/madroots/jwtv/releases) page.
+Or get the latest APK from [Releases](https://github.com/madroots/jwtv/releases) (`app-release.apk` for TV, `app-phone-release.apk` for phones).
 
 
 ## Releasing
 
-Publish a GitHub release with a tag like `v3.9.8` (web UI or `gh release create v3.9.8 --generate-notes`). The [Release workflow](.github/workflows/release.yml) builds both apps and attaches `app-release.apk`, `app-phone-release.apk`, `version.txt` and `version-phone.txt`. Installed apps check on launch and offer the update, showing the release notes.
+Publish a GitHub release with a higher tag, e.g. `gh release create v3.9.15 --generate-notes`. The [Release workflow](.github/workflows/release.yml) builds both apps and attaches the APKs and version files; installed apps then offer the update with the release notes.
 
-- The tag sets the version: `vX.Y.Z` → versionName `X.Y.Z`, versionCode `X*10000 + Y*100 + Z`. Each tag must be higher than the last.
-- Pre-releases build too, but apps never see them, so use them to test the pipeline.
-- Signing uses the `RELEASE_KEYSTORE_B64` repository secret (base64 keystore). It must stay the same key, or installed apps cannot update.
+- `vX.Y.Z` sets versionName `X.Y.Z` and versionCode `X*10000 + Y*100 + Z`, so each tag must be higher than the last.
+- Pre-releases build too but are never offered to apps, which makes them handy for testing.
+- Signing uses the `RELEASE_KEYSTORE_B64` repository secret. Keep the same key, or installed apps can't update.
 
 
 ## Disclaimer
@@ -58,5 +61,4 @@ This project is for **personal and educational use only**. It is not affiliated 
 
 ## License
 
-This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
-
+Apache License 2.0. See [LICENSE](LICENSE).
