@@ -44,10 +44,9 @@ fun getBestVideoUrl(video: MediaItem, selectedResolution: String?): String? {
     return files.firstOrNull { it.progressiveDownloadURL != null }?.progressiveDownloadURL
 }
 
-/** Media3 item with the video's VTT subtitle configuration, like the TV player. */
-fun buildMedia3Item(video: MediaItem, url: String): Media3Item {
+/** Media3 item for [url] with [subtitleUrl] (WebVTT, any language version) if given. */
+fun buildMedia3Item(url: String, subtitleUrl: String?): Media3Item {
     val builder = Media3Item.Builder().setUri(url)
-    val subtitleUrl = video.files?.firstNotNullOfOrNull { it.subtitles?.url }
     if (subtitleUrl != null) {
         val subtitleConfig = Media3Item.SubtitleConfiguration.Builder(Uri.parse(subtitleUrl))
             .setMimeType(MimeTypes.TEXT_VTT)

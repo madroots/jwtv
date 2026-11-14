@@ -30,8 +30,16 @@ data class MediaItem(
     val title: String,
     val duration: Double? = null,
     val images: Map<String, ImageDetail>? = null,
-    val files: List<MediaFile>? = null
+    val files: List<MediaFile>? = null,
+    /** Same id for every language version, e.g. "pub-jwb-143_1_VIDEO". */
+    val languageAgnosticNaturalKey: String? = null,
+    /** Language codes this video exists in (each version has its own subtitles). */
+    val availableLanguages: List<String>? = null
 ) {
+    /** This version's own subtitle file, if any. */
+    val subtitleUrl: String?
+        get() = files?.firstNotNullOfOrNull { it.subtitles?.url }
+
     fun getThumbnailUrl(small: Boolean = false): String? {
         val preferredKeys = listOf("wss", "lsr", "pnr", "sqr")
         if (small) {
@@ -98,5 +106,14 @@ data class LanguageInfo(
     val code: String,
     val locale: String? = null,
     val vernacular: String,
-    val name: String
+    val name: String,
+    /** Sign-language versions have no subtitle files. */
+    val isSignLanguage: Boolean = false
+)
+
+/** Response of `GET /media-items/{lang}/{languageAgnosticNaturalKey}`. */
+@Immutable
+@Serializable
+data class MediaItemsResponse(
+    val media: List<MediaItem> = emptyList()
 )

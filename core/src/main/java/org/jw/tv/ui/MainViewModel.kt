@@ -38,6 +38,10 @@ data class SubcategoryWithMedia(
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
+    companion object {
+        const val SUBTITLES_OFF = "off"
+    }
+
     private val sharedPrefs =
         application.getSharedPreferences(WatchProgressStore.PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -69,7 +73,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun play(video: MediaItem, resolution: String?, fromStart: Boolean = false) {
         selectedResolution = resolution
         playFromStart = fromStart
-        activeVideo = video
+        activeVideo = upToDate(video)
+    }
+
+    /**
+     * Rows saved by older versions (Continue Watching, downloads) lack fields
+     * such as [MediaItem.availableLanguages]; prefer the freshly loaded copy
+     * of the same video when one is on screen. Saving progress then stores it.
+     */
+    private fun upToDate(video: MediaItem): MediaItem {
+        if (video.languageAgnosticNaturalKey != null) return video
+        return (listOfNotNull(featuredVideo) + subcategoriesWithMedia.flatMap { it.videos })
+            .firstOrNull { it.contentId == video.contentId } ?: video
     }
 
     /**
@@ -107,6 +122,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun updateDefaultQuality(quality: String?) {
         defaultQuality = quality
         sharedPrefs.edit().putString("default_quality", quality).apply()
+    }
+
+    /**
+     * Remembered subtitle choice: null = the video's own language,
+     * [SUBTITLES_OFF], or a language code whose subtitles are shown over
+     * every video that exists in that language.
+     */
+    var subtitleLanguage by mutableStateOf(sharedPrefs.getString("subtitle_language", null))
+        private set
+
+    /** Last few foreign subtitle languages picked, most recent first. */
+    var recentSubtitleLanguages by mutableStateOf(
+        sharedPrefs.getString("subtitle_recent", "").orEmpty().split(',').filter { it.isNotBlank() }
+    )
+        private set
+
+    fun updateSubtitleLanguage(choice: String?) {
+        // Picking the library language is the same as "original".
+        val normalized = choice.takeUnless { it == selectedLanguageCode }
+        subtitleLanguage = normalized
+        if (normalized != null && normalized != SUBTITLES_OFF) {
+            recentSubtitleLanguages = (listOf(normalized) + recentSubtitleLanguages.minus(normalized)).take(3)
+        }
+        sharedPrefs.edit()
+            .putString("subtitle_language", normalized)
+            .putString("subtitle_recent", recentSubtitleLanguages.joinToString(","))
+            .apply()
     }
     // ── Downloads ─────────────────────────────────────────────────────────────
 
