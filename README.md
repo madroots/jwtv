@@ -40,9 +40,7 @@ Press **CC** in the player and pick from Off, the video's own language, your rec
 
 ## Download
 
-On your Android TV, open **AFTV News Downloader**, enter code **`4641922`**, then download and install.
-
-Or get the latest APK from [Releases](https://github.com/madroots/jwtv/releases) (`app-release.apk` for TV, `app-phone-release.apk` for phones).
+Get the latest APK from [Releases](https://github.com/madroots/jwtv/releases): `app-release.apk` for TV, `app-phone-release.apk` for phones. Installed apps update themselves.
 
 
 ## Releasing
