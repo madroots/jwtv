@@ -4,6 +4,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
@@ -41,7 +44,11 @@ class MainActivity : ComponentActivity() {
 
             NavHost(
                 navController = navController,
-                startDestination = if (activeVideo != null) "player" else "browser"
+                startDestination = if (activeVideo != null) "player" else "browser",
+                // Navigation's default is a 700 ms crossfade; a short fade feels
+                // responsive and spends fewer frames compositing two screens.
+                enterTransition = { fadeIn(tween(220)) },
+                exitTransition = { fadeOut(tween(180)) }
             ) {
                 composable("browser") {
                     VideoBrowserScreen(

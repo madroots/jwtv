@@ -6,7 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.PeopleAlt
@@ -84,6 +86,55 @@ import org.jw.tv.data.DownloadEntity
 import org.jw.tv.data.WatchProgressEntity
 
 private val SIDEBAR_FULL_DP = 240.dp
+
+// Focused cards grow slightly (Surface animates it on the GPU via graphicsLayer).
+// The rows' contentPadding leaves room so the grown card is never clipped.
+private const val CARD_FOCUS_SCALE = 1.06f
+
+private val SidebarGradient = Brush.horizontalGradient(
+    colors = listOf(
+        Color(0xFF020305),                    // solid near-black left
+        Color(0xFF020305).copy(alpha = 0.95f), // near-solid behind text
+        Color.Transparent                      // fades at right edge
+    )
+)
+
+/**
+ * Placeholder rows while a category loads: the page's shape appears at once
+ * instead of a spinner. One shared pulse animates alpha only (draw phase).
+ */
+@Composable
+private fun LoadingSkeleton() {
+    val pulse = rememberInfiniteTransition(label = "skeleton").animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
+        label = "skeletonAlpha"
+    )
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .graphicsLayer { alpha = pulse.value },
+        verticalArrangement = Arrangement.spacedBy(28.dp)
+    ) {
+        repeat(2) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.width(180.dp).height(18.dp).background(Color(0xFF1E242C)))
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    repeat(5) {
+                        Box(
+                            Modifier
+                                .width(220.dp)
+                                .aspectRatio(16f / 9f)
+                                .background(Color(0xFF161B22))
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 private val SIDEBAR_ICON_DP = 70.dp
 
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
@@ -97,11 +148,14 @@ fun VideoBrowserScreen(
 
     var sidebarExpanded by remember { mutableStateOf(false) }
 
-    val sidebarWidth by animateDpAsState(
-        targetValue = if (sidebarExpanded) SIDEBAR_FULL_DP else SIDEBAR_ICON_DP,
-        animationSpec = tween(durationMillis = 250),
-        label = "sidebarWidth"
+    // Width snaps (one relayout); the expand/collapse motion is alpha and
+    // translation in graphicsLayer, so it costs no layout passes per frame.
+    val sidebarReveal = animateFloatAsState(
+        targetValue = if (sidebarExpanded) 1f else 0f,
+        animationSpec = tween(durationMillis = 220),
+        label = "sidebarReveal"
     )
+    val sidebarWidth = if (sidebarExpanded) SIDEBAR_FULL_DP else SIDEBAR_ICON_DP
 
     val heroPlayFocusRequester = remember { FocusRequester() }
 
@@ -152,14 +206,14 @@ fun VideoBrowserScreen(
         ) {
             TvLazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    // Rows fade/rise in when a category's content arrives.
+                    .fadeInOnChange(currentCategoryKey to (viewModel.uiState is UiState.Success))
             ) {
                 when (val state = viewModel.uiState) {
                     is UiState.Loading -> item(key = "loading") {
-                        Box(
-                            Modifier.fillMaxWidth().height(300.dp),
-                            contentAlignment = Alignment.Center
-                        ) { CircularProgressIndicator(color = Color.White) }
+                        LoadingSkeleton()
                     }
 
                     is UiState.Error -> item(key = "error") {
@@ -202,7 +256,7 @@ fun VideoBrowserScreen(
                                 Column(
                                     Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 24.dp, vertical = 12.dp)
+                                        .padding(vertical = 4.dp)
                                         .then(
                                             if (isFirstRowBelowHero) {
                                                 Modifier.focusProperties { up = heroPlayFocusRequester }
@@ -214,10 +268,12 @@ fun VideoBrowserScreen(
                                         color = Color.White,
                                         fontSize = 19.sp,
                                         fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(bottom = 10.dp)
+                                        modifier = Modifier.padding(start = 24.dp, bottom = 2.dp)
                                     )
                                     TvLazyRow(
                                         horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                        // Room for the focused card's scale-up so it isn't clipped.
+                                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 10.dp),
                                         pivotOffsets = androidx.tv.foundation.PivotOffsets(parentFraction = 0.08f)
                                     ) {
                                         items(
@@ -267,7 +323,7 @@ fun VideoBrowserScreen(
                                 Column(
                                     Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 24.dp, vertical = 12.dp)
+                                        .padding(vertical = 4.dp)
                                         .then(
                                             if (isFirstRowBelowHero) {
                                                 Modifier.focusProperties { up = heroPlayFocusRequester }
@@ -279,10 +335,12 @@ fun VideoBrowserScreen(
                                         color = Color.White,
                                         fontSize = 19.sp,
                                         fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(bottom = 10.dp)
+                                        modifier = Modifier.padding(start = 24.dp, bottom = 2.dp)
                                     )
                                     TvLazyRow(
                                         horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                        // Room for the focused card's scale-up so it isn't clipped.
+                                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 10.dp),
                                         pivotOffsets = androidx.tv.foundation.PivotOffsets(parentFraction = 0.08f)
                                     ) {
                                         items(
@@ -305,14 +363,14 @@ fun VideoBrowserScreen(
             }
         }
         // ── Scrim overlay: darkens the main content behind the expanded sidebar ──
-        if (sidebarExpanded) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.7f))
-                    .zIndex(15f)
-            )
-        }
+        // Always composed; alpha follows the sidebar so it fades instead of popping.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(15f)
+                .graphicsLayer { alpha = sidebarReveal.value }
+                .background(Color.Black.copy(alpha = 0.7f))
+        )
 
 
         // ── Sidebar ───────────────────────────────────────────────────────────
@@ -325,19 +383,10 @@ fun VideoBrowserScreen(
                 .width(sidebarWidth)
                 .fillMaxHeight()
                 .zIndex(30f)
-                .then(
-                    if (sidebarExpanded)
-                        Modifier.background(
-                            Brush.horizontalGradient(
-                                colors = listOf(
-                                    Color(0xFF020305),                               // solid near-black left
-                                    Color(0xFF020305).copy(alpha = 0.95f),            // near-solid behind text
-                                    Color.Transparent                                  // fades at right edge
-                                )
-                            )
-                        )
-                    else Modifier
-                )
+                .drawBehind {
+                    val reveal = sidebarReveal.value
+                    if (reveal > 0f) drawRect(SidebarGradient, alpha = reveal)
+                }
                 .onFocusChanged { sidebarExpanded = it.hasFocus }
                 .padding(vertical = 24.dp)
         ) {
@@ -361,7 +410,8 @@ fun VideoBrowserScreen(
                         color = Color.White,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        maxLines = 1
+                        maxLines = 1,
+                        modifier = Modifier.revealFromLeft { sidebarReveal.value }
                     )
                 }
             }
@@ -380,6 +430,7 @@ fun VideoBrowserScreen(
                         label = "Favorites (${viewModel.favoritesList.size})",
                         selected = isFavSelected,
                         expanded = sidebarExpanded,
+                        reveal = { sidebarReveal.value },
                         onClick = {
                             viewModel.selectFavoritesCategory()
                             coroutineScope.launch { listState.animateScrollToItem(0) }
@@ -395,6 +446,7 @@ fun VideoBrowserScreen(
                         label = category.name,
                         selected = viewModel.currentCategory?.key == category.key,
                         expanded = sidebarExpanded,
+                        reveal = { sidebarReveal.value },
                         onClick = {
                             viewModel.selectCategory(category)
                             coroutineScope.launch { listState.animateScrollToItem(0) }
@@ -414,6 +466,7 @@ fun VideoBrowserScreen(
                     label = "Settings",
                     selected = false,
                     expanded = sidebarExpanded,
+                    reveal = { sidebarReveal.value },
                     onClick = { showSettingsDialog = true }
                 )
                 if (sidebarExpanded) {
@@ -421,7 +474,9 @@ fun VideoBrowserScreen(
                         text = "v${BuildConfig.VERSION_NAME} (${versionCode})",
                         color = Color(0xFF8B949E),
                         fontSize = 11.sp,
-                        modifier = Modifier.padding(start = 12.dp, top = 2.dp),
+                        modifier = Modifier
+                            .padding(start = 12.dp, top = 2.dp)
+                            .revealFromLeft { sidebarReveal.value },
                         maxLines = 1
                     )
                 }
@@ -602,7 +657,7 @@ fun VideoBrowserScreen(
     }
 }
 
-// ── Continue Watching Card (ZERO Scale, 2dp White Border on Focus) ───────────
+// ── Continue Watching Card (focus: gentle scale + 2dp white border) ──────────
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -637,7 +692,7 @@ fun ContinueWatchingCard(
                 shape = RoundedCornerShape(0.dp)
             )
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = CARD_FOCUS_SCALE),
         modifier = modifier
             .width(220.dp)
             .aspectRatio(16f / 9f)
@@ -684,7 +739,8 @@ private fun SidebarItem(
     selected: Boolean,
     expanded: Boolean,
     onClick: () -> Unit,
-    focusRequester: FocusRequester? = null
+    focusRequester: FocusRequester? = null,
+    reveal: () -> Float = { 1f }
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
@@ -763,7 +819,8 @@ private fun SidebarItem(
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.revealFromLeft(reveal)
                 )
             }
         }
@@ -880,7 +937,12 @@ fun HeroBanner(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(horizontal = 14.dp)
                 ) {
-                    Text("▶", fontSize = 15.sp, color = Color.White)
+                    androidx.compose.material3.Icon(
+                        Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
                     Text(
                         "Play Now",
                         fontSize = 14.sp,
@@ -893,7 +955,7 @@ fun HeroBanner(
     }
 }
 
-// ── Video card (ZERO Scale, 2dp White Border on Focus) ───────────────────────
+// ── Video card (focus: gentle scale + 2dp white border) ──────────────────────
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -926,7 +988,7 @@ fun VideoCard(
                 shape = RoundedCornerShape(0.dp)
             )
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = CARD_FOCUS_SCALE),
         modifier = modifier
             .width(220.dp)
             .aspectRatio(16f / 9f)
@@ -1034,9 +1096,11 @@ fun VideoDetailsDialog(
             dismissOnClickOutside = false
         )
     ) {
+        val enter = rememberEnterProgress()
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .fadeIn(enter)
                 .background(Color.Black.copy(alpha = 0.85f)),
             contentAlignment = Alignment.Center
         ) {
@@ -1049,6 +1113,7 @@ fun VideoDetailsDialog(
             shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(0.dp)),
             scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
             modifier = Modifier
+                .popIn(enter)
                 .width(880.dp)
                 .height(470.dp)
         ) {
@@ -1331,7 +1396,7 @@ fun LanguageSelectionDialog(
         androidx.compose.material3.Surface(
             color = Color(0xFF1E1E1E),
             shape = RoundedCornerShape(0.dp),
-            modifier = Modifier.width(560.dp).height(520.dp)
+            modifier = Modifier.popIn(rememberEnterProgress()).width(560.dp).height(520.dp)
         ) {
             Column(Modifier.fillMaxSize().padding(20.dp)) {
                 Text(
@@ -1518,6 +1583,7 @@ fun SettingsDialog(
     ) {
         Box(
             modifier = Modifier
+                .popIn(rememberEnterProgress())
                 .width(500.dp)
                 .background(Color(0xFF1E1E1E))
         ) {
@@ -1710,6 +1776,7 @@ fun ManageDownloadsDialog(
     ) {
         Box(
             modifier = Modifier
+                .popIn(rememberEnterProgress())
                 .width(680.dp)
                 .height(520.dp)
                 .background(Color(0xFF1E1E1E))

@@ -24,10 +24,13 @@ android {
 
     buildTypes {
         release {
-            // Minify/shrinker stays off for now; signed with the debug key so
-            // the release artifact is installable via the self-update channel
-            // (issue #7) — mirrors :app, which also signs release with debug.
-            isMinifyEnabled = false
+            // Signed with the debug key so the release artifact installs over
+            // earlier releases via the self-update channel (same as :app).
+            isMinifyEnabled = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -37,6 +40,11 @@ android {
     }
     kotlinOptions {
         jvmTarget = "21"
+        // Skips recomposition of composables with unstable params (e.g. the
+        // ViewModel) and memoizes lambdas: fewer recompositions per frame.
+        freeCompilerArgs += listOf(
+            "-P", "plugin:androidx.compose.compiler.plugins.kotlin:experimentalStrongSkipping=true"
+        )
     }
     buildFeatures {
         compose = true

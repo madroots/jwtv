@@ -39,6 +39,11 @@ android {
     }
     kotlinOptions {
         jvmTarget = "21"
+        // Skips recomposition of composables with unstable params (e.g. the
+        // ViewModel) and memoizes lambdas: fewer recompositions per frame.
+        freeCompilerArgs += listOf(
+            "-P", "plugin:androidx.compose.compiler.plugins.kotlin:experimentalStrongSkipping=true"
+        )
     }
     buildFeatures {
         compose = true
