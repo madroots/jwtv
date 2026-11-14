@@ -12,3 +12,10 @@ fun formatDuration(durationSeconds: Double?): String {
     return if (h > 0) String.format("%d:%02d:%02d", h, m, s)
     else String.format("%02d:%02d", m, s)
 }
+
+/** "512 KB", "34.2 MB", "1.5 GB". */
+fun formatBytes(bytes: Long): String = when {
+    bytes >= 1L shl 30 -> String.format("%.1f GB", bytes / (1L shl 30).toDouble())
+    bytes >= 1L shl 20 -> String.format("%.1f MB", bytes / (1L shl 20).toDouble())
+    else -> "${(bytes + 1023) / 1024} KB"
+}

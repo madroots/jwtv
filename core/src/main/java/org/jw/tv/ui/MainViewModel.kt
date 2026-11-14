@@ -23,6 +23,7 @@ import org.jw.tv.api.LanguageInfo
 import org.jw.tv.api.MediaItem
 import org.jw.tv.api.DownloadManager
 import org.jw.tv.api.MediatorClient
+import java.io.File
 
 // PERF-5: @Immutable enables Compose recomposition skipping when the same
 // reference is re-passed to a composable. All fields are val so this is safe.
@@ -87,28 +88,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var allDownloads by mutableStateOf<List<DownloadEntity>>(emptyList())
         private set
 
+    /** contentId -> size of the downloaded file in bytes. */
+    var downloadSizes by mutableStateOf<Map<String, Long>>(emptyMap())
+        private set
+
+    /** Bytes in the downloads folder not belonging to any listed download. */
+    var unlistedDownloadBytes by mutableStateOf(0L)
+        private set
+
+    var freeStorageBytes by mutableStateOf(0L)
+        private set
+
     // Compose snapshot state must only be written from the main thread. These
     // helpers marshal DB reads onto IO and state writes onto Main — writing
     // mutableStateOf from a background thread races active compositions and
     // throws "Reading a state that was created after the snapshot was taken".
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val filesDir: File get() = getApplication<Application>().filesDir
 
     fun refreshDownloads() {
         viewModelScope.launch {
-            val all = withContext(Dispatchers.IO) { mediaDao.getAllDownloads() }
-            allDownloads = all
-            downloadedIds = all.map { it.contentId }.toSet()
-            downloadedQualities = all.map { "${it.contentId}|${it.quality}" }.toSet()
+            val storage = DownloadManager.scanStorage(filesDir, mediaDao)
+            allDownloads = storage.downloads
+            downloadSizes = storage.sizes
+            unlistedDownloadBytes = storage.unlistedBytes
+            freeStorageBytes = storage.freeBytes
+            downloadedIds = storage.downloads.map { it.contentId }.toSet()
+            downloadedQualities = storage.downloads.map { "${it.contentId}|${it.quality}" }.toSet()
         }
     }
 
     fun startVideoDownload(video: MediaItem, quality: String) {
-        val app = getApplication<Application>()
         isDownloadingVideo = true
         videoDownloadProgress = 0f
         viewModelScope.launch {
             val ok = DownloadManager.downloadVideo(
-                app, video, quality, mediaDao,
+                filesDir, video, quality, mediaDao,
                 // downloadVideo runs on IO; hop to main before touching state.
                 onProgress = { progress ->
                     mainHandler.post { videoDownloadProgress = progress }
@@ -126,13 +141,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteDownload(contentId: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val dl = mediaDao.getDownload(contentId)
-            if (dl != null) {
-                DownloadManager.deleteDownload(getApplication(), dl)
-                mediaDao.removeDownload(contentId)
-                refreshDownloads()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                mediaDao.getDownload(contentId)?.let { DownloadManager.deleteDownload(it, mediaDao) }
             }
+            refreshDownloads()
+        }
+    }
+
+    fun deleteUnlistedDownloads() {
+        viewModelScope.launch {
+            DownloadManager.deleteUnlisted(filesDir, mediaDao)
+            refreshDownloads()
+        }
+    }
+
+    fun deleteAllDownloads() {
+        viewModelScope.launch {
+            DownloadManager.deleteAll(filesDir, mediaDao)
+            refreshDownloads()
         }
     }
 

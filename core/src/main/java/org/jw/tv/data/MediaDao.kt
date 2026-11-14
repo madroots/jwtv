@@ -51,6 +51,9 @@ interface MediaDao {
     @Query("DELETE FROM downloads WHERE contentId = :contentId")
     suspend fun removeDownload(contentId: String)
 
+    @Query("DELETE FROM downloads")
+    suspend fun removeAllDownloads()
+
     @Query("SELECT contentId FROM downloads")
     suspend fun getAllDownloadedIds(): List<String>
 
