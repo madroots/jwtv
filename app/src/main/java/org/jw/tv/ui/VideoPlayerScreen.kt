@@ -110,8 +110,8 @@ fun VideoPlayerScreen(
     /** Remembered choice: null = original, [MainViewModel.SUBTITLES_OFF], or a language code. */
     subtitleLanguage: String? = null,
     onSubtitleLanguageChange: (String?) -> Unit = {},
-    /** Recently picked subtitle languages, listed first in the picker. */
-    recentSubtitleLanguages: List<String> = emptyList()
+    /** Languages pinned at the top of the picker (used before, then English). */
+    pinnedSubtitleLanguages: List<String> = emptyList()
 ) {
     val context = LocalContext.current
 
@@ -132,8 +132,8 @@ fun VideoPlayerScreen(
     // Every language version of a video is the same edit with its own WebVTT
     // file, so another language's subtitles can be shown over this video.
     val ownSubtitleUrl = remember(video) { video.subtitleUrl }
-    val otherSubtitleLanguages = remember(video, languages, recentSubtitleLanguages) {
-        SubtitleLookup.otherLanguages(video, videoLanguage, languages, recentSubtitleLanguages)
+    val otherSubtitleLanguages = remember(video, languages, pinnedSubtitleLanguages) {
+        SubtitleLookup.otherLanguages(video, videoLanguage, languages, pinnedSubtitleLanguages)
     }
     val languageNames = remember(languages) { languages.associate { it.code to it.vernacular } }
     // null = the video's own subtitles, SUBTITLES_OFF, or another language's code.

@@ -89,6 +89,8 @@ import kotlinx.coroutines.launch
 import org.jw.tv.BuildConfig
 import org.jw.tv.api.MediaItem
 import org.jw.tv.api.MediatorClient
+import org.jw.tv.api.LanguageInfo
+import org.jw.tv.api.SubtitleLookup
 import org.jw.tv.data.DownloadEntity
 import org.jw.tv.data.WatchProgressEntity
 
@@ -195,6 +197,7 @@ fun VideoBrowserScreen(
 
     var selectedVideoForDetails by remember { mutableStateOf<MediaItem?>(null) }
     var showLanguageDialog by remember { mutableStateOf(false) }
+    var showSubtitleLanguageDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showManageDownloads by remember { mutableStateOf(false) }
 
@@ -512,17 +515,74 @@ fun VideoBrowserScreen(
             }
         )
     }
+    var settingsFocus by remember { mutableStateOf(SettingsFocus.Quality) }
+    // Both language pickers open from Settings and return to it when closed.
     if (showLanguageDialog) {
-        LanguageSelectionDialog(viewModel = viewModel, onDismiss = { showLanguageDialog = false })
+        val popularCodes = listOf("E", "S", "T", "U", "K", "F", "X", "I")
+        LanguageSelectionDialog(
+            title = "Media language",
+            languages = viewModel.languagesList,
+            pinnedHeader = "Popular",
+            pinned = viewModel.languagesList.filter { it.code in popularCodes }.map { lang ->
+                LanguagePick(lang.code, "${lang.vernacular} (${lang.name})", lang.code == viewModel.selectedLanguageCode) {
+                    viewModel.changeLanguage(lang.code, lang.vernacular)
+                }
+            },
+            selectedCode = viewModel.selectedLanguageCode,
+            onSelect = { viewModel.changeLanguage(it.code, it.vernacular) },
+            onDismiss = {
+                showLanguageDialog = false
+                settingsFocus = SettingsFocus.MediaLanguage
+                showSettingsDialog = true
+            }
+        )
+    }
+    if (showSubtitleLanguageDialog) {
+        val choice = viewModel.subtitleLanguage
+        val subtitleLanguages = SubtitleLookup.subtitleLanguages(viewModel.languagesList)
+        LanguageSelectionDialog(
+            title = "Subtitle language",
+            languages = subtitleLanguages,
+            pinnedHeader = "Quick picks",
+            pinned = listOf(
+                LanguagePick("off", "Off", choice == MainViewModel.SUBTITLES_OFF) {
+                    viewModel.updateSubtitleLanguage(MainViewModel.SUBTITLES_OFF)
+                },
+                LanguagePick("same", "Same as video", choice == null) {
+                    viewModel.updateSubtitleLanguage(null)
+                }
+            ) + viewModel.subtitleShortcuts.mapNotNull { code ->
+                subtitleLanguages.firstOrNull { it.code == code }?.let { lang ->
+                    LanguagePick("pin_${lang.code}", "${lang.vernacular} (${lang.name})", choice == lang.code) {
+                        viewModel.updateSubtitleLanguage(lang.code)
+                    }
+                }
+            },
+            selectedCode = choice,
+            onSelect = { viewModel.updateSubtitleLanguage(it.code) },
+            onDismiss = {
+                showSubtitleLanguageDialog = false
+                settingsFocus = SettingsFocus.SubtitleLanguage
+                showSettingsDialog = true
+            }
+        )
     }
 
     if (showSettingsDialog) {
         SettingsDialog(
             viewModel = viewModel,
-            onDismiss = { showSettingsDialog = false },
+            onDismiss = {
+                showSettingsDialog = false
+                settingsFocus = SettingsFocus.Quality
+            },
+            initialFocus = settingsFocus,
             onOpenLanguage = {
                 showSettingsDialog = false
                 showLanguageDialog = true
+            },
+            onOpenSubtitles = {
+                showSettingsDialog = false
+                showSubtitleLanguageDialog = true
             },
             onOpenDownloads = {
                 showSettingsDialog = false
@@ -1545,22 +1605,29 @@ fun VideoDetailsDialog(
 
 // ── Language dialog ──────────────────────────────────────────────────────────
 
+/** A row pinned above "All Languages" (popular languages, Off, Same as video, …). */
+class LanguagePick(val key: String, val label: String, val selected: Boolean, val onClick: () -> Unit)
+
+/**
+ * Language picker used for both the media language and the preferred
+ * subtitle language: search field, a pinned section, then all [languages].
+ */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun LanguageSelectionDialog(
-    viewModel: MainViewModel,
+    title: String,
+    languages: List<LanguageInfo>,
+    pinnedHeader: String,
+    pinned: List<LanguagePick>,
+    selectedCode: String?,
+    onSelect: (LanguageInfo) -> Unit,
     onDismiss: () -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    val popularCodes = listOf("E", "S", "T", "U", "K", "F", "X", "I")
-
-    val popular = remember(viewModel.languagesList) {
-        viewModel.languagesList.filter { it.code in popularCodes }
-    }
-    val filtered = remember(searchQuery, viewModel.languagesList) {
+    val filtered = remember(searchQuery, languages) {
         val q = searchQuery.trim().lowercase()
-        if (q.isEmpty()) viewModel.languagesList
-        else viewModel.languagesList.filter {
+        if (q.isEmpty()) languages
+        else languages.filter {
             it.name.lowercase().contains(q) || it.vernacular.lowercase().contains(q)
         }
     }
@@ -1590,7 +1657,7 @@ fun LanguageSelectionDialog(
         ) {
             Column(Modifier.fillMaxSize().padding(20.dp)) {
                 Text(
-                    "Select Language",
+                    title,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -1646,19 +1713,22 @@ fun LanguageSelectionDialog(
                 ) {
                     if (searchQuery.isEmpty()) {
                         Text(
-                            "Popular",
+                            pinnedHeader,
                             fontSize = 12.sp,
                             color = Color(0xFF8B949E),
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
-                        popular.forEachIndexed { idx, lang ->
-                            LangRow(
-                                label = "${lang.vernacular} (${lang.name})",
-                                modifier = if (idx == 0) Modifier.focusRequester(firstItemFocus) else Modifier
-                            ) {
-                                viewModel.changeLanguage(lang.code, lang.vernacular)
-                                onDismiss()
+                        pinned.forEachIndexed { idx, pick ->
+                            key(pick.key) {
+                                LangRow(
+                                    label = pick.label,
+                                    selected = pick.selected,
+                                    modifier = if (idx == 0) Modifier.focusRequester(firstItemFocus) else Modifier
+                                ) {
+                                    pick.onClick()
+                                    onDismiss()
+                                }
                             }
                         }
                         Spacer(Modifier.height(8.dp))
@@ -1671,15 +1741,18 @@ fun LanguageSelectionDialog(
                         )
                     }
                     filtered.forEachIndexed { idx, lang ->
-                        // When search is active (popular section hidden) the first
+                        // When search is active (pinned section hidden) the first
                         // filtered row gets the focus requester.
                         val isFirst = searchQuery.isNotEmpty() && idx == 0
-                        LangRow(
-                            label = "${lang.vernacular} (${lang.name})",
-                            modifier = if (isFirst) Modifier.focusRequester(firstItemFocus) else Modifier
-                        ) {
-                            viewModel.changeLanguage(lang.code, lang.vernacular)
-                            onDismiss()
+                        key(lang.code) {
+                            LangRow(
+                                label = "${lang.vernacular} (${lang.name})",
+                                selected = lang.code == selectedCode,
+                                modifier = if (isFirst) Modifier.focusRequester(firstItemFocus) else Modifier
+                            ) {
+                                onSelect(lang)
+                                onDismiss()
+                            }
                         }
                     }
                 }
@@ -1702,7 +1775,7 @@ fun LanguageSelectionDialog(
                         )
                     ),
                     modifier = Modifier.align(Alignment.End)
-                ) { Text("Cancel") }
+                ) { Text("Cancel", color = Color.White) }
             }
         }
     }
@@ -1713,12 +1786,13 @@ fun LanguageSelectionDialog(
 private fun LangRow(
     label: String,
     modifier: Modifier = Modifier,
+    selected: Boolean = false,
     onClick: () -> Unit
 ) {
     Surface(
         onClick = onClick,
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color(0xFF262626),
+            containerColor = if (selected) Color(0xFF34495E) else Color(0xFF262626),
             contentColor = Color.White,
             focusedContainerColor = Color(0xFF383838),
             focusedContentColor = Color.White
@@ -1733,13 +1807,20 @@ private fun LangRow(
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
         modifier = modifier.fillMaxWidth()
     ) {
-        Text(
-            label,
-            color = Color.White,
-            fontSize = 14.sp,
-            maxLines = 1,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
-        )
+        Row(
+            Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                label,
+                color = Color.White,
+                fontSize = 14.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            if (selected) Text("✓", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }
 
@@ -1751,8 +1832,14 @@ fun SettingsDialog(
     viewModel: MainViewModel,
     onDismiss: () -> Unit,
     onOpenLanguage: () -> Unit = {},
-    onOpenDownloads: () -> Unit = {}
+    onOpenSubtitles: () -> Unit = {},
+    onOpenDownloads: () -> Unit = {},
+    /** Where focus starts: the selected quality, or the button the user came back from. */
+    initialFocus: SettingsFocus = SettingsFocus.Quality
 ) {
+    val qualityFocus = remember { FocusRequester() }
+    val mediaLanguageFocus = remember { FocusRequester() }
+    val subtitleLanguageFocus = remember { FocusRequester() }
     val context = LocalContext.current
     val qualities = listOf("Auto", "144p", "240p", "360p", "480p", "720p", "1080p", "2160p")
     val settingsVersionCode = try {
@@ -1777,6 +1864,15 @@ fun SettingsDialog(
                 .width(500.dp)
                 .background(Color(0xFF1E1E1E))
         ) {
+            LaunchedEffect(Unit) {
+                try {
+                    when (initialFocus) {
+                        SettingsFocus.Quality -> qualityFocus
+                        SettingsFocus.MediaLanguage -> mediaLanguageFocus
+                        SettingsFocus.SubtitleLanguage -> subtitleLanguageFocus
+                    }.requestFocus()
+                } catch (_: Exception) {}
+            }
             Column(Modifier.fillMaxWidth().padding(24.dp)) {
                 Text(
                     "Settings",
@@ -1821,45 +1917,55 @@ fun SettingsDialog(
                                     shape = RoundedCornerShape(0.dp)
                                 )
                             ),
-                            shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp))
+                            shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp)),
+                            modifier = if (isSelected) Modifier.focusRequester(qualityFocus) else Modifier
                         ) { Text(q) }
                     }
                 }
                 Spacer(Modifier.height(24.dp))
 
-                // Language
+                // Languages: media + preferred subtitles
                 Text(
-                    "Language",
+                    "Languages",
                     color = Color(0xFF8B949E),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.height(10.dp))
-                OutlinedButton(
-                    onClick = onOpenLanguage,
-                    colors = ButtonDefaults.colors(
-                        contentColor = Color.White,
-                        focusedContainerColor = Color(0xFF2A3644),
-                        focusedContentColor = Color.White
-                    ),
-                    border = ButtonDefaults.border(
-                        border = Border(
-                            border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
-                            shape = RoundedCornerShape(0.dp)
-                        ),
-                        focusedBorder = Border(
-                            border = BorderStroke(2.dp, Color.White),
-                            shape = RoundedCornerShape(0.dp)
-                        )
-                    ),
-                    shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp))
-                ) {
-                    Text("Language: ${viewModel.selectedLanguageName}", color = Color.White)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    listOf(
+                        Triple("Media: ${viewModel.selectedLanguageName}", onOpenLanguage, mediaLanguageFocus),
+                        Triple("Subtitles: ${viewModel.subtitleLanguageLabel}", onOpenSubtitles, subtitleLanguageFocus)
+                    ).forEach { (label, onClick, focus) ->
+                        OutlinedButton(
+                            onClick = onClick,
+                            colors = ButtonDefaults.colors(
+                                contentColor = Color.White,
+                                focusedContainerColor = Color(0xFF2A3644),
+                                focusedContentColor = Color.White
+                            ),
+                            border = ButtonDefaults.border(
+                                border = Border(
+                                    border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
+                                    shape = RoundedCornerShape(0.dp)
+                                ),
+                                focusedBorder = Border(
+                                    border = BorderStroke(2.dp, Color.White),
+                                    shape = RoundedCornerShape(0.dp)
+                                )
+                            ),
+                            shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp)),
+                            modifier = Modifier.focusRequester(focus)
+                        ) {
+                            Text(label, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 Text(
-                    "Switch language from the main menu sidebar.",
-                    color = Color(0xFF5A6B7C),
+                    "Subtitles are shown on every video available in that language. " +
+                        "You can still change them in the player (CC).",
+                    color = Color(0xFF8B949E),
                     fontSize = 11.sp
                 )
                 Spacer(Modifier.height(16.dp))
@@ -1933,6 +2039,8 @@ fun SettingsDialog(
         }
     }
 }
+
+enum class SettingsFocus { Quality, MediaLanguage, SubtitleLanguage }
 // ── Manage Downloads dialog ───────────────────────────────────────────────────
 
 @OptIn(ExperimentalTvMaterial3Api::class)

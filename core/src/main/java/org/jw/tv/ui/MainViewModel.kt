@@ -40,6 +40,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
         const val SUBTITLES_OFF = "off"
+        /** JW language code for English; always offered near the top of subtitle lists. */
+        const val ENGLISH = "E"
     }
 
     private val sharedPrefs =
@@ -135,8 +137,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Last few foreign subtitle languages picked, most recent first. */
     var recentSubtitleLanguages by mutableStateOf(
         sharedPrefs.getString("subtitle_recent", "").orEmpty().split(',').filter { it.isNotBlank() }
+            .let { recent ->
+                // A preference saved before recents existed still counts as used.
+                val preferred = subtitleLanguage?.takeUnless { it == SUBTITLES_OFF }
+                if (preferred != null && preferred !in recent) listOf(preferred) + recent else recent
+            }
     )
         private set
+
+    /**
+     * Languages pinned at the top of every subtitle list: the ones used
+     * before, then English.
+     */
+    val subtitleShortcuts: List<String>
+        get() = (recentSubtitleLanguages + ENGLISH).distinct()
+
+    /** Human-readable current subtitle preference, for Settings. */
+    val subtitleLanguageLabel: String
+        get() = when (val choice = subtitleLanguage) {
+            null -> "Same as video"
+            SUBTITLES_OFF -> "Off"
+            else -> languagesList.firstOrNull { it.code == choice }?.vernacular ?: choice
+        }
 
     fun updateSubtitleLanguage(choice: String?) {
         // Picking the library language is the same as "original".

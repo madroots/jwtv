@@ -43,6 +43,7 @@ import org.jw.tv.ui.formatBytes
 fun SettingsScreen(
     viewModel: MainViewModel,
     onOpenLanguage: () -> Unit,
+    onOpenSubtitles: () -> Unit,
     onOpenDownloads: () -> Unit
 ) {
     val qualities = listOf("Auto", "144p", "240p", "360p", "480p", "720p", "1080p", "2160p")
@@ -96,9 +97,15 @@ fun SettingsScreen(
         Spacer(Modifier.height(28.dp))
 
         SettingsRow(
-            title = "Language",
+            title = "Media language",
             subtitle = viewModel.selectedLanguageName,
             onClick = onOpenLanguage
+        )
+        Spacer(Modifier.height(12.dp))
+        SettingsRow(
+            title = "Subtitle language",
+            subtitle = viewModel.subtitleLanguageLabel,
+            onClick = onOpenSubtitles
         )
         Spacer(Modifier.height(12.dp))
         SettingsRow(

@@ -63,6 +63,7 @@ import org.jw.phone.ui.HomeScreen
 import org.jw.phone.ui.JwPhoneTheme
 import org.jw.phone.ui.LanguageScreen
 import org.jw.phone.ui.SettingsScreen
+import org.jw.phone.ui.SubtitleLanguageScreen
 import org.jw.phone.ui.VideoDetailsSheet
 import org.jw.tv.api.MediaItem
 import org.jw.tv.ui.MainViewModel
@@ -129,6 +130,7 @@ private fun PhoneRoot(viewModel: MainViewModel) {
             title = viewModel.currentCategory?.name ?: "Category"; showBack = true
         }
         currentRoute == "language" -> { title = "Select Language"; showBack = true }
+        currentRoute == "subtitle_language" -> { title = "Subtitle Language"; showBack = true }
         currentRoute == "downloads" -> { title = "Manage Downloads"; showBack = true }
         currentRoute == "player" -> { title = ""; showBack = false }
         else -> { title = "JW TV"; showBack = false }
@@ -211,6 +213,7 @@ private fun PhoneRoot(viewModel: MainViewModel) {
                 SettingsScreen(
                     viewModel = viewModel,
                     onOpenLanguage = { navController.navigate("language") },
+                    onOpenSubtitles = { navController.navigate("subtitle_language") },
                     onOpenDownloads = { navController.navigate("downloads") }
                 )
             }
@@ -218,6 +221,12 @@ private fun PhoneRoot(viewModel: MainViewModel) {
                 LanguageScreen(
                     viewModel = viewModel,
                     onLanguageChosen = { navController.popBackStack() }
+                )
+            }
+            composable("subtitle_language") {
+                SubtitleLanguageScreen(
+                    viewModel = viewModel,
+                    onChosen = { navController.popBackStack() }
                 )
             }
             composable("downloads") {
@@ -235,7 +244,7 @@ private fun PhoneRoot(viewModel: MainViewModel) {
                         languages = viewModel.languagesList,
                         subtitleLanguage = viewModel.subtitleLanguage,
                         onSubtitleLanguageChange = viewModel::updateSubtitleLanguage,
-                        recentSubtitleLanguages = viewModel.recentSubtitleLanguages,
+                        pinnedSubtitleLanguages = viewModel.subtitleShortcuts,
                         onBack = {
                             viewModel.activeVideo = null
                             // Explicit route (same pattern as the TV app): avoids

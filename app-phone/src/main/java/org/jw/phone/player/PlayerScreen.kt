@@ -106,8 +106,8 @@ fun PlayerScreen(
     /** Remembered choice: null = original, [MainViewModel.SUBTITLES_OFF], or a language code. */
     subtitleLanguage: String? = null,
     onSubtitleLanguageChange: (String?) -> Unit = {},
-    /** Recently picked subtitle languages, listed first in the picker. */
-    recentSubtitleLanguages: List<String> = emptyList()
+    /** Languages pinned at the top of the picker (used before, then English). */
+    pinnedSubtitleLanguages: List<String> = emptyList()
 ) {
     val context = LocalContext.current
     val activity = LocalContext.current as? android.app.Activity
@@ -129,8 +129,8 @@ fun PlayerScreen(
 
     // ── Subtitles: the video's own, off, or another language version's file ──
     val ownSubtitleUrl = remember(video) { video.subtitleUrl }
-    val otherSubtitleLanguages = remember(video, languages, recentSubtitleLanguages) {
-        SubtitleLookup.otherLanguages(video, videoLanguage, languages, recentSubtitleLanguages)
+    val otherSubtitleLanguages = remember(video, languages, pinnedSubtitleLanguages) {
+        SubtitleLookup.otherLanguages(video, videoLanguage, languages, pinnedSubtitleLanguages)
     }
     val languageNames = remember(languages) { languages.associate { it.code to it.vernacular } }
     var subtitleChoice by remember {

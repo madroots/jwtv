@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.jw.tv.api.SubtitleLookup
 import org.jw.tv.ui.MainViewModel
 
 /**
@@ -121,3 +122,69 @@ private fun LanguageRow(label: String, onClick: () -> Unit) {
             .padding(horizontal = 8.dp, vertical = 14.dp)
     )
 }
+
+/**
+ * Preferred subtitle language: Off, the video's own, used-before languages
+ * and English, then every language with subtitles. Shown over every video
+ * that exists in that language (the player's CC button can still change it).
+ */
+@Composable
+fun SubtitleLanguageScreen(
+    viewModel: MainViewModel,
+    onChosen: () -> Unit
+) {
+    var searchQuery by remember { mutableStateOf("") }
+    val shortcuts = viewModel.subtitleShortcuts
+    val all = remember(viewModel.languagesList) { SubtitleLookup.subtitleLanguages(viewModel.languagesList) }
+    val pinned = remember(all, shortcuts) { shortcuts.mapNotNull { code -> all.firstOrNull { it.code == code } } }
+    val filtered = remember(searchQuery, all) {
+        val q = searchQuery.trim().lowercase()
+        if (q.isEmpty()) all
+        else all.filter { it.name.lowercase().contains(q) || it.vernacular.lowercase().contains(q) }
+    }
+    val current = viewModel.subtitleLanguage
+    fun choose(code: String?) {
+        viewModel.updateSubtitleLanguage(code)
+        onChosen()
+    }
+
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        Spacer(Modifier.height(12.dp))
+        TextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = { Text("Search...", color = Color.Gray) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                cursorColor = Color.White,
+                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                unfocusedIndicatorColor = Color(0xFF5A6B7C)
+            )
+        )
+        Spacer(Modifier.height(12.dp))
+        LazyColumn(
+            contentPadding = PaddingValues(bottom = 16.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            if (searchQuery.isEmpty()) {
+                item(key = "quick_header") { LanguageHeader("Quick picks") }
+                item(key = "off") { LanguageRow(checked("Off", current == MainViewModel.SUBTITLES_OFF)) { choose(MainViewModel.SUBTITLES_OFF) } }
+                item(key = "same") { LanguageRow(checked("Same as video", current == null)) { choose(null) } }
+                items(items = pinned, key = { "pinned_${it.code}" }) { lang ->
+                    LanguageRow(checked("${lang.vernacular} (${lang.name})", current == lang.code)) { choose(lang.code) }
+                }
+                item(key = "all_header") { LanguageHeader("All Languages") }
+            }
+            items(items = filtered, key = { it.code }) { lang ->
+                LanguageRow(checked("${lang.vernacular} (${lang.name})", current == lang.code)) { choose(lang.code) }
+            }
+        }
+    }
+}
+
+private fun checked(label: String, selected: Boolean) = if (selected) "$label  ✓" else label

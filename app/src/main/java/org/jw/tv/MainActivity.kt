@@ -68,7 +68,7 @@ class MainActivity : ComponentActivity() {
                             languages = viewModel.languagesList,
                             subtitleLanguage = viewModel.subtitleLanguage,
                             onSubtitleLanguageChange = viewModel::updateSubtitleLanguage,
-                            recentSubtitleLanguages = viewModel.recentSubtitleLanguages,
+                            pinnedSubtitleLanguages = viewModel.subtitleShortcuts,
                             onBack = {
                                 viewModel.activeVideo = null
                                 navController.popBackStack("browser", inclusive = false)
