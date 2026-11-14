@@ -36,8 +36,7 @@ import org.jw.tv.ui.MainViewModel
 
 /**
  * Settings tab. Port of the TV SettingsDialog: default quality, language,
- * manage downloads. Deliberately NO "Check for Update" — the update metadata
- * serves the TV APK until platform-aware updates land (issue #7).
+ * manage downloads, manual update check.
  */
 @Composable
 fun SettingsScreen(

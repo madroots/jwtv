@@ -11,9 +11,11 @@ android {
         applicationId = "org.jw.phone"
         minSdk = 21
         targetSdk = 35
-        // Independent versioning from the TV app (:app is 60 / 3.9.7).
-        versionCode = 1
-        versionName = "1.0.0"
+        // Local builds use these defaults. Release builds get both values from
+        // the git tag via -PreleaseVersionCode / -PreleaseVersionName
+        // (.github/workflows/release.yml), shared with :app.
+        versionCode = providers.gradleProperty("releaseVersionCode").orNull?.toInt() ?: 1
+        versionName = providers.gradleProperty("releaseVersionName").orNull ?: "1.0.0"
 
         vectorDrawables {
             useSupportLibrary = true

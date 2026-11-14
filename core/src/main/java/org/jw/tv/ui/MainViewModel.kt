@@ -207,6 +207,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var updateApkUrl by mutableStateOf("")
         private set
 
+    /** Version name of the offered update (from the release tag); null if unknown. */
+    var updateVersionName by mutableStateOf<String?>(null)
+        private set
+
+    /** Plain-text release notes of the offered update; null if none/unavailable. */
+    var updateNotes by mutableStateOf<String?>(null)
+        private set
+
     // BUG-3: hoisted; "Later" sets this true; checkForUpdates resets on new version.
     var updateDialogDismissed by mutableStateOf(false)
 
@@ -405,6 +413,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     result == null ->
                         if (manual) updateCheckMessage = "Failed to reach update server."
                     result > currentVersion -> {
+                        // Best effort: the dialog still works without notes.
+                        val release = UpdateManager.fetchLatestRelease()
+                        updateVersionName = release?.versionName
+                        updateNotes = release?.plainNotes
                         updateAvailable = true
                         updateDialogDismissed = false
                         updateApkUrl = "${UpdateManager.apkUrl}?t=$ts"

@@ -44,6 +44,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -70,17 +72,17 @@ private val TAB_ROUTES = listOf("home", "categories", "favorites", "settings")
 /**
  * Phone entry point. Portrait-first; the player route takes over orientation
  * handling itself (issue #4).
- *
- * NOTE: unlike the TV MainActivity this deliberately does NOT call
- * [MainViewModel.checkForUpdates] — the update metadata currently points at the
- * TV APK. Platform-aware updates are handled in issue #7; until then the phone
- * app must never offer to install a TV build.
  */
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Phone update channel is configured in JwPhoneApp. Only on a fresh
+        // start, so rotation doesn't re-trigger the check.
+        if (savedInstanceState == null) {
+            viewModel.checkForUpdates(BuildConfig.VERSION_CODE)
+        }
         setContent {
             JwPhoneTheme {
                 PhoneRoot(viewModel)
@@ -249,7 +251,7 @@ private fun PhoneRoot(viewModel: MainViewModel) {
         )
     }
 
-    // ── Self-update dialogs (issue #7) — port of the TV update flow ─────────
+    // ── Self-update dialogs — port of the TV update flow ────────────────────
     if (viewModel.updateAvailable && !viewModel.updateDialogDismissed) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissUpdateDialog() },
@@ -258,7 +260,9 @@ private fun PhoneRoot(viewModel: MainViewModel) {
                     Text("Update Available", color = Color.White)
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "A new version is ready to download.",
+                        viewModel.updateVersionName
+                            ?.let { "v${BuildConfig.VERSION_NAME} → v$it" }
+                            ?: "A new version is ready to download.",
                         color = Color(0xFF8B949E),
                         fontSize = 13.sp
                     )
@@ -266,9 +270,10 @@ private fun PhoneRoot(viewModel: MainViewModel) {
             },
             text = {
                 Text(
-                    "A new version is available for download.",
+                    viewModel.updateNotes ?: "A new version is available for download.",
                     color = Color.LightGray,
-                    fontSize = 14.sp
+                    fontSize = 14.sp,
+                    modifier = Modifier.verticalScroll(rememberScrollState())
                 )
             },
             confirmButton = {
