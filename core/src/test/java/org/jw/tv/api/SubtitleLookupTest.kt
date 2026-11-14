@@ -48,21 +48,23 @@ class SubtitleLookupTest {
     }
 
     @Test
-    fun `recently used languages come first, the rest stay alphabetical`() {
+    fun `used-before languages and English come first, the rest stay alphabetical`() {
         val video = MediaItem(
             title = "t",
             languageAgnosticNaturalKey = "k",
             availableLanguages = listOf("E", "S", "F", "X", "J")
         )
         val languages = listOf(
+            LanguageInfo("E", vernacular = "English", name = "English"),
             LanguageInfo("S", vernacular = "español", name = "Spanish"),
             LanguageInfo("F", vernacular = "Français", name = "French"),
             LanguageInfo("X", vernacular = "Deutsch", name = "German"),
             LanguageInfo("J", vernacular = "日本語", name = "Japanese")
         )
 
-        val offered = SubtitleLookup.otherLanguages(video, "E", languages, recent = listOf("J", "F"))
+        // Spanish video; Japanese used before; English always pinned.
+        val offered = SubtitleLookup.otherLanguages(video, "S", languages, pinned = listOf("J", "E"))
 
-        assertEquals(listOf("J", "F", "X", "S"), offered.map { it.code })
+        assertEquals(listOf("J", "E", "X", "F"), offered.map { it.code })
     }
 }

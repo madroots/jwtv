@@ -34,21 +34,31 @@ object SubtitleLookup {
 
     /**
      * Languages to offer for [video]: the ones it exists in, minus sign
-     * languages (no subtitle files) and [ownLanguage]. [recent] picks come
-     * first so switching between a few languages doesn't mean scrolling a
-     * list of ~300 with the remote; the rest are sorted by name.
+     * languages (no subtitle files) and [ownLanguage]. [pinned] codes (used
+     * before, English) come first, in that order, so the remote doesn't have
+     * to scroll ~300 entries; the rest are sorted by name.
      */
     fun otherLanguages(
         video: MediaItem,
         ownLanguage: String,
         languages: List<LanguageInfo>,
-        recent: List<String> = emptyList()
+        pinned: List<String> = emptyList()
     ): List<LanguageInfo> {
         val available = video.availableLanguages?.toHashSet() ?: return emptyList()
-        val recentRank = recent.withIndex().associate { (i, code) -> code to i }
+        return pinnedFirst(
+            languages.filter { it.code in available && it.code != ownLanguage && !it.isSignLanguage },
+            pinned
+        )
+    }
+
+    /** Every language that can have subtitles (no sign languages), [pinned] first. */
+    fun subtitleLanguages(languages: List<LanguageInfo>, pinned: List<String> = emptyList()): List<LanguageInfo> =
+        pinnedFirst(languages.filterNot { it.isSignLanguage }, pinned)
+
+    private fun pinnedFirst(languages: List<LanguageInfo>, pinned: List<String>): List<LanguageInfo> {
+        val rank = pinned.withIndex().associate { (i, code) -> code to i }
         return languages
-            .filter { it.code in available && it.code != ownLanguage && !it.isSignLanguage }
             .sortedBy { it.vernacular.lowercase() }
-            .sortedBy { recentRank[it.code] ?: Int.MAX_VALUE } // stable: the rest keep name order
+            .sortedBy { rank[it.code] ?: Int.MAX_VALUE } // stable: the rest keep name order
     }
 }
