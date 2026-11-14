@@ -35,7 +35,7 @@ jobs:
       # with anything else cannot install over it.
       EXPECTED_CERT_SHA256: aa842d1527b7308a7796e752ae79d9256f8dfdaf7107513759c29ca1c03ab06a
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Derive version from tag
         run: |
@@ -66,12 +66,12 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Install signing key
         env:
