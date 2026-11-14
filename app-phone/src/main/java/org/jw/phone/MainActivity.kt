@@ -111,9 +111,8 @@ private fun PhoneRoot(viewModel: MainViewModel) {
         }
     }
 
-    fun play(video: MediaItem, resolution: String?) {
-        viewModel.selectedResolution = resolution
-        viewModel.activeVideo = video
+    fun play(video: MediaItem, resolution: String?, fromStart: Boolean = false) {
+        viewModel.play(video, resolution, fromStart)
         detailsVideo = null
         navController.navigate("player")
     }
@@ -179,7 +178,8 @@ private fun PhoneRoot(viewModel: MainViewModel) {
                 HomeScreen(
                     viewModel = viewModel,
                     onVideoClick = { detailsVideo = it },
-                    onPlayVideo = { video -> play(video, null) }
+                    // Continue Watching: resume in the preferred (e.g. downloaded) quality.
+                    onPlayVideo = { video -> play(video, viewModel.preferredResolution(video)) }
                 )
             }
             composable("categories") {
@@ -229,6 +229,8 @@ private fun PhoneRoot(viewModel: MainViewModel) {
                     PlayerScreen(
                         video = video,
                         selectedResolution = viewModel.selectedResolution,
+                        // Read once per video, not on every Continue Watching update.
+                        startPositionMs = remember(video) { viewModel.startPositionMs(video) },
                         onBack = {
                             viewModel.activeVideo = null
                             // Explicit route (same pattern as the TV app): avoids
@@ -247,7 +249,7 @@ private fun PhoneRoot(viewModel: MainViewModel) {
             video = video,
             viewModel = viewModel,
             onDismiss = { detailsVideo = null },
-            onPlay = { resolution -> play(video, resolution) }
+            onPlay = { resolution, fromStart -> play(video, resolution, fromStart) }
         )
     }
 

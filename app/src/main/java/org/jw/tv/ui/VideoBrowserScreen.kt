@@ -32,6 +32,13 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.foundation.focusGroup
+import org.jw.tv.data.formatTimeLeft
+import org.jw.tv.data.toMediaItem
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.PeopleAlt
@@ -163,7 +170,12 @@ fun VideoBrowserScreen(
     // canonical animation in BOTH directions — no hand-rolled focus scrolling.
     val listState = rememberTvLazyListState()
     val currentCategoryKey = viewModel.currentCategory?.key
-    val isHome = viewModel.currentCategory == null || viewModel.currentCategory?.key == "VideoOnDemand"
+    // "Home" = the landing category (first in the sidebar) or the root; that's
+    // where Continue Watching sits. Previously only the root counted, which is
+    // never shown, so the row never appeared.
+    val isHome = viewModel.currentCategory == null ||
+        viewModel.currentCategory?.key == "VideoOnDemand" ||
+        viewModel.currentCategory?.key == viewModel.categories.firstOrNull()?.key
 
     // Featured video from API (available on Home screen & when root response is loaded)
     val featured = viewModel.featuredVideo ?: viewModel.subcategoriesWithMedia.firstOrNull()?.videos?.firstOrNull()
@@ -283,12 +295,15 @@ fun VideoBrowserScreen(
                                             ContinueWatchingCard(
                                                 progress = progress,
                                                 onClick = {
-                                                    val mediaItem = try {
-                                                        MediatorClient.json.decodeFromString<MediaItem>(progress.rawMediaItemJson)
-                                                    } catch (e: Exception) { null }
-                                                    if (mediaItem != null) {
-                                                        viewModel.activeVideo = mediaItem
+                                                    // Resume straight away in the preferred
+                                                    // (e.g. downloaded) quality.
+                                                    progress.toMediaItem()?.let {
+                                                        viewModel.play(it, viewModel.preferredResolution(it))
                                                     }
+                                                },
+                                                // Long-press: details, for Start over etc.
+                                                onLongClick = {
+                                                    progress.toMediaItem()?.let { selectedVideoForDetails = it }
                                                 }
                                             )
                                         }
@@ -491,9 +506,8 @@ fun VideoBrowserScreen(
             video = video,
             viewModel = viewModel,
             onDismiss = { selectedVideoForDetails = null },
-            onPlay = { resolution ->
-                viewModel.selectedResolution = resolution
-                viewModel.activeVideo = video
+            onPlay = { resolution, fromStart ->
+                viewModel.play(video, resolution, fromStart)
                 selectedVideoForDetails = null
             }
         )
@@ -645,7 +659,7 @@ fun VideoBrowserScreen(
     viewModel.updateCheckMessage?.let { msg ->
         AlertDialog(
             onDismissRequest = { viewModel.clearUpdateCheckMessage() },
-            title = { Text("App Update Status", color = Color.White) },
+            title = { Text("JW TV", color = Color.White) },
             text = { Text(msg, color = Color.LightGray) },
             confirmButton = {
                 Button(onClick = { viewModel.clearUpdateCheckMessage() }) { Text("OK") }
@@ -664,6 +678,7 @@ fun VideoBrowserScreen(
 fun ContinueWatchingCard(
     progress: WatchProgressEntity,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -681,6 +696,7 @@ fun ContinueWatchingCard(
 
     Surface(
         onClick = onClick,
+        onLongClick = onLongClick,
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color(0xFF161B22),
             focusedContainerColor = Color(0xFF161B22)
@@ -705,6 +721,20 @@ fun ContinueWatchingCard(
                     modifier = Modifier.fillMaxSize().background(Color(0xFF1A1F27)),
                     contentScale = ContentScale.Crop
                 )
+                Box(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(start = 6.dp, end = 6.dp, bottom = 10.dp)
+                        .background(Color(0xCC000000))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        formatTimeLeft(progress.durationMs - progress.positionMs),
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
                 LinearProgressIndicator(
                     progress = { progressFraction },
                     color = Color(0xFFFF0033),
@@ -1057,37 +1087,73 @@ fun VideoCard(
     }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
+private class DetailsMenuOption(
+    val icon: ImageVector,
+    val label: String,
+    val onClick: () -> Unit
+)
+
+@OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun VideoDetailsDialog(
     video: MediaItem,
     viewModel: MainViewModel,
     onDismiss: () -> Unit,
-    onPlay: (selectedResolution: String?) -> Unit
+    onPlay: (selectedResolution: String?, fromStart: Boolean) -> Unit
 ) {
-    var chosenResolution by remember { mutableStateOf<String?>(null) }
+    var chosenResolution by remember { mutableStateOf(viewModel.preferredResolution(video)) }
     val resolutions = remember(video) {
         video.files?.mapNotNull { it.label }?.distinct() ?: emptyList()
     }
-    val resolutionsScrollState = rememberScrollState()
     val playButtonFocusRequester = remember { FocusRequester() }
+    val menuButtonFocusRequester = remember { FocusRequester() }
+    val firstMenuItemFocusRequester = remember { FocusRequester() }
+    // The download button turns into "Saved" when the download finishes; keep
+    // the remote's focus on that slot instead of losing it.
+    val downloadButtonFocusRequester = remember { FocusRequester() }
+    var awaitingDownload by remember { mutableStateOf(false) }
     val isFavorite = video.contentId in viewModel.favoriteContentIds
 
-    LaunchedEffect(Unit) {
-        // Priority: downloaded quality > user default > Auto
-        val downloadedRes = resolutions.firstOrNull { "${video.contentId}|${it}" in viewModel.downloadedQualities }
-        if (downloadedRes != null) {
-            chosenResolution = downloadedRes
-        } else {
-            val def = viewModel.defaultQuality
-            if (def != null && def in resolutions) {
-                chosenResolution = def
-            }
+    // Same source the player resumes from, so the button never lies.
+    var resumeMs by remember { mutableLongStateOf(viewModel.resumePositionMs(video)) }
+    val durationMs = ((video.duration ?: 0.0) * 1000).toLong()
+    val canResume = resumeMs > 0L
+    var menuOpen by remember { mutableStateOf(false) }
+
+    val download = viewModel.allDownloads.firstOrNull { it.contentId == video.contentId }
+    val menuOptions = buildList {
+        if (canResume) add(DetailsMenuOption(Icons.Filled.Replay, "Start over") {
+            menuOpen = false
+            onPlay(chosenResolution, true)
+        })
+        if (download != null) {
+            val size = viewModel.downloadSizes[download.contentId]?.let { " · ${formatBytes(it)}" }.orEmpty()
+            add(DetailsMenuOption(Icons.Filled.Delete, "Delete download (${download.quality}$size)") {
+                menuOpen = false
+                viewModel.deleteDownload(download.contentId)
+            })
         }
-        try { playButtonFocusRequester.requestFocus() } catch (e: Exception) {}
+        if (canResume) add(DetailsMenuOption(Icons.Filled.Close, "Remove from Continue Watching") {
+            menuOpen = false
+            viewModel.clearWatchProgress(video)
+            resumeMs = 0L
+        })
     }
-    // behind it. BACK fires onDismissRequest exactly once (dismissOnBackPress).
-    // dismissOnClickOutside = false: the only way out is BACK.
+
+    // Initial focus on Play/Resume; when the menu closes, back to its button.
+    var menuWasOpened by remember { mutableStateOf(false) }
+    LaunchedEffect(menuOpen) {
+        try {
+            when {
+                menuOpen -> {
+                    menuWasOpened = true
+                    firstMenuItemFocusRequester.requestFocus()
+                }
+                menuWasOpened && menuOptions.isNotEmpty() -> menuButtonFocusRequester.requestFocus()
+                else -> playButtonFocusRequester.requestFocus()
+            }
+        } catch (e: Exception) {}
+    }
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -1100,22 +1166,26 @@ fun VideoDetailsDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                // Remote Back: close the menu first, then the dialog. Handled
+                // here because Compose would otherwise spend Back on moving
+                // focus out of the focused button.
+                .onPreviewKeyEvent {
+                    if (it.key != Key.Back) return@onPreviewKeyEvent false
+                    if (it.type == KeyEventType.KeyUp) {
+                        if (menuOpen) menuOpen = false else onDismiss()
+                    }
+                    true
+                }
                 .fadeIn(enter)
                 .background(Color.Black.copy(alpha = 0.85f)),
             contentAlignment = Alignment.Center
         ) {
-        Surface(
-            onClick = {},
-            colors = ClickableSurfaceDefaults.colors(
-                containerColor = Color(0xFF161B22),
-                focusedContainerColor = Color(0xFF161B22)
-            ),
-            shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(0.dp)),
-            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
+        Box(
             modifier = Modifier
                 .popIn(enter)
                 .width(880.dp)
                 .height(470.dp)
+                .background(Color(0xFF161B22))
         ) {
             Row(modifier = Modifier.fillMaxSize()) {
                 Box(modifier = Modifier.weight(0.58f).fillMaxHeight()) {
@@ -1166,22 +1236,21 @@ fun VideoDetailsDialog(
                             )
                         }
                     }
-                    // Continue Watching progress bar in modal
-                    val progFrac = viewModel.watchProgressMap[video.contentId]
-                    if (progFrac != null && progFrac > 0.01f) {
-                        Spacer(Modifier.height(8.dp))
-                        LinearProgressIndicator(
-                            progress = { progFrac },
-                            color = Color(0xFFFF0033),
-                            trackColor = Color(0x66000000),
-                            modifier = Modifier.fillMaxWidth().height(4.dp)
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "Resume from ${formatDuration((video.duration ?: 0.0) * progFrac.toDouble())}",
-                            color = Color(0xFF8B949E),
-                            fontSize = 11.sp
-                        )
+                    if (canResume && durationMs > 0L) {
+                        Column {
+                            LinearProgressIndicator(
+                                progress = { (resumeMs.toFloat() / durationMs).coerceIn(0f, 1f) },
+                                color = Color(0xFFFF0033),
+                                trackColor = Color(0x66000000),
+                                modifier = Modifier.fillMaxWidth().height(4.dp)
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "Stopped at ${formatDuration(resumeMs / 1000.0)} · ${formatTimeLeft(durationMs - resumeMs)}",
+                                color = Color(0xFF8B949E),
+                                fontSize = 12.sp
+                            )
+                        }
                     }
 
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1241,9 +1310,9 @@ fun VideoDetailsDialog(
                         }
 
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            // 1. Play Now — always visible, first button (focused by default)
+                            // 1. Play / Resume — first button, focused by default
                             Button(
-                                onClick = { onPlay(chosenResolution) },
+                                onClick = { onPlay(chosenResolution, false) },
                                 colors = ButtonDefaults.colors(
                                     containerColor = Color(0xFFFF0033),
                                     contentColor = Color.White,
@@ -1262,16 +1331,70 @@ fun VideoDetailsDialog(
                                     .height(44.dp)
                                     .focusRequester(playButtonFocusRequester)
                             ) {
-                                Text("▶ Play Now", color = Color.White, fontWeight = FontWeight.Bold)
+                                androidx.compose.material3.Icon(
+                                    Icons.Filled.PlayArrow,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    if (canResume) "Resume" else "Play",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
 
-                            // 2. Download button (icon only, or "Saved" if already downloaded)
+                            // More options: Start over, delete download, …
+                            if (menuOptions.isNotEmpty()) {
+                                OutlinedButton(
+                                    onClick = { menuOpen = true },
+                                    colors = ButtonDefaults.colors(
+                                        containerColor = if (menuOpen) Color(0xFF2A3644) else Color.Transparent,
+                                        contentColor = Color.White,
+                                        focusedContainerColor = Color(0xFF2A3644),
+                                        focusedContentColor = Color.White
+                                    ),
+                                    scale = ButtonDefaults.scale(focusedScale = 1.0f),
+                                    border = ButtonDefaults.border(
+                                        border = Border(
+                                            border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
+                                            shape = RoundedCornerShape(0.dp)
+                                        ),
+                                        focusedBorder = Border(
+                                            border = BorderStroke(2.dp, Color.White),
+                                            shape = RoundedCornerShape(0.dp)
+                                        )
+                                    ),
+                                    shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp)),
+                                    contentPadding = PaddingValues(0.dp),
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .focusRequester(menuButtonFocusRequester)
+                                ) {
+                                    androidx.compose.material3.Icon(
+                                        Icons.Filled.MoreVert,
+                                        contentDescription = "More options",
+                                        tint = Color.White,
+                                        modifier = Modifier.fillMaxSize().padding(10.dp)
+                                    )
+                                }
+                            }
+
+                            // Download button (icon only, or "Saved" if already downloaded)
                             val isQualityDownloaded = chosenResolution != null &&
                                 "${video.contentId}|${chosenResolution}" in viewModel.downloadedQualities
+                            LaunchedEffect(isQualityDownloaded) {
+                                if (isQualityDownloaded && awaitingDownload) {
+                                    awaitingDownload = false
+                                    try { downloadButtonFocusRequester.requestFocus() } catch (e: Exception) {}
+                                }
+                            }
                             if (chosenResolution != null) {
                                 if (isQualityDownloaded) {
+                                    // Opens the menu, which has "Delete download".
                                     OutlinedButton(
-                                        onClick = {},
+                                        onClick = { menuOpen = true },
                                         colors = ButtonDefaults.colors(
                                             containerColor = Color(0xFF1B3A2D),
                                             contentColor = Color(0xFF66BB6A),
@@ -1289,13 +1412,18 @@ fun VideoDetailsDialog(
                                             )
                                         ),
                                         shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp)),
-                                        modifier = Modifier.height(44.dp)
+                                        modifier = Modifier
+                                            .height(44.dp)
+                                            .focusRequester(downloadButtonFocusRequester)
                                     ) {
                                         Text("✓ Saved", color = Color(0xFF66BB6A), fontWeight = FontWeight.Bold)
                                     }
                                 } else {
                                     Button(
-                                        onClick = { viewModel.startVideoDownload(video, chosenResolution!!) },
+                                        onClick = {
+                                            awaitingDownload = true
+                                            viewModel.startVideoDownload(video, chosenResolution!!)
+                                        },
                                         colors = ButtonDefaults.colors(
                                             containerColor = Color(0xFF1E5C8C),
                                             contentColor = Color.White,
@@ -1309,17 +1437,20 @@ fun VideoDetailsDialog(
                                             )
                                         ),
                                         shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp)),
-                                        modifier = Modifier.height(44.dp)
+                                        modifier = Modifier
+                                            .height(44.dp)
+                                            .focusRequester(downloadButtonFocusRequester)
                                     ) {
                                         Text("⬇", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 22.sp)
                                     }
                                 }
                             }
 
-                            // 3. Favorite — heart icon only
+                            // Favorite — heart icon only
                             OutlinedButton(
                                 onClick = { viewModel.toggleFavorite(video) },
                                 colors = ButtonDefaults.colors(
+                                    containerColor = Color.Transparent,
                                     contentColor = Color.White,
                                     focusedContainerColor = Color(0xFF2A3644),
                                     focusedContentColor = Color.White
@@ -1343,6 +1474,51 @@ fun VideoDetailsDialog(
                                     color = if (isFavorite) Color(0xFFFF0033) else Color.White,
                                     fontSize = 20.sp
                                 )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Options menu, opening upward from the button row. Focus stays
+            // trapped inside until it closes (item chosen or Back).
+            if (menuOpen) {
+                Column(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 24.dp, bottom = 80.dp)
+                        .width(340.dp)
+                        .popIn(rememberEnterProgress(160))
+                        .background(Color(0xFF232A33))
+                        .padding(vertical = 6.dp)
+                        .focusProperties { exit = { FocusRequester.Cancel } }
+                        .focusGroup()
+                ) {
+                    menuOptions.forEachIndexed { index, option ->
+                        Surface(
+                            onClick = option.onClick,
+                            colors = ClickableSurfaceDefaults.colors(
+                                containerColor = Color.Transparent,
+                                contentColor = Color.White,
+                                focusedContainerColor = Color.White,
+                                focusedContentColor = Color.Black
+                            ),
+                            shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(0.dp)),
+                            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(
+                                    if (index == 0) Modifier.focusRequester(firstMenuItemFocusRequester)
+                                    else Modifier
+                                )
+                        ) {
+                            Row(
+                                Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(option.icon, contentDescription = null, modifier = Modifier.size(20.dp))
+                                Spacer(Modifier.width(14.dp))
+                                Text(option.label, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
                     }

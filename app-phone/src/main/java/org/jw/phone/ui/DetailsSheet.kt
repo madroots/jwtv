@@ -47,6 +47,18 @@ import coil.request.ImageRequest
 import org.jw.tv.api.MediaItem
 import org.jw.tv.ui.MainViewModel
 import org.jw.tv.ui.formatDuration
+import org.jw.tv.ui.formatBytes
+import org.jw.tv.data.formatTimeLeft
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.mutableLongStateOf
 
 /**
  * Video details as a modal bottom sheet — touch port of the TV
@@ -59,26 +71,20 @@ fun VideoDetailsSheet(
     video: MediaItem,
     viewModel: MainViewModel,
     onDismiss: () -> Unit,
-    onPlay: (selectedResolution: String?) -> Unit
+    onPlay: (selectedResolution: String?, fromStart: Boolean) -> Unit
 ) {
-    var chosenResolution by remember { mutableStateOf<String?>(null) }
+    var chosenResolution by remember { mutableStateOf(viewModel.preferredResolution(video)) }
     val resolutions = remember(video) {
         video.files?.mapNotNull { it.label }?.distinct() ?: emptyList()
     }
     val isFavorite = video.contentId in viewModel.favoriteContentIds
 
-    LaunchedEffect(Unit) {
-        // Priority: downloaded quality > user default > Auto (same as TV).
-        val downloadedRes = resolutions.firstOrNull {
-            "${video.contentId}|${it}" in viewModel.downloadedQualities
-        }
-        if (downloadedRes != null) {
-            chosenResolution = downloadedRes
-        } else {
-            val def = viewModel.defaultQuality
-            if (def != null && def in resolutions) chosenResolution = def
-        }
-    }
+    // Same source the player resumes from.
+    var resumeMs by remember { mutableLongStateOf(viewModel.resumePositionMs(video)) }
+    val durationMs = ((video.duration ?: 0.0) * 1000).toLong()
+    val canResume = resumeMs > 0L
+    val download = viewModel.allDownloads.firstOrNull { it.contentId == video.contentId }
+    var menuOpen by remember { mutableStateOf(false) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -138,21 +144,19 @@ fun VideoDetailsSheet(
                 )
             }
 
-            // Continue Watching progress
-            val progFrac = viewModel.watchProgressMap[video.contentId]
-            if (progFrac != null && progFrac > 0.01f) {
+            if (canResume && durationMs > 0L) {
                 Spacer(Modifier.height(10.dp))
                 LinearProgressIndicator(
-                    progress = { progFrac },
+                    progress = { (resumeMs.toFloat() / durationMs).coerceIn(0f, 1f) },
                     color = MaterialTheme.colorScheme.primary,
                     trackColor = Color(0x66000000),
                     modifier = Modifier.fillMaxWidth().height(4.dp)
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Resume from ${formatDuration((video.duration ?: 0.0) * progFrac.toDouble())}",
+                    "Stopped at ${formatDuration(resumeMs / 1000.0)} · ${formatTimeLeft(durationMs - resumeMs)}",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 11.sp
+                    fontSize = 12.sp
                 )
             }
 
@@ -208,14 +212,64 @@ fun VideoDetailsSheet(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Button(
-                    onClick = { onPlay(chosenResolution) },
+                    onClick = { onPlay(chosenResolution, false) },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = Color.White
                     ),
                     modifier = Modifier.height(44.dp)
                 ) {
-                    Text("▶ Play Now", fontWeight = FontWeight.Bold)
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (canResume) "Resume" else "Play", fontWeight = FontWeight.Bold)
+                }
+
+                // More options: Start over, delete download, remove from Continue Watching.
+                if (canResume || download != null) {
+                    Box {
+                        OutlinedButton(
+                            onClick = { menuOpen = true },
+                            modifier = Modifier.size(44.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                        ) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = Color.White)
+                        }
+                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            if (canResume) {
+                                DropdownMenuItem(
+                                    text = { Text("Start over") },
+                                    leadingIcon = { Icon(Icons.Filled.Replay, contentDescription = null) },
+                                    onClick = {
+                                        menuOpen = false
+                                        onPlay(chosenResolution, true)
+                                    }
+                                )
+                            }
+                            if (download != null) {
+                                val size = viewModel.downloadSizes[download.contentId]
+                                    ?.let { " · ${formatBytes(it)}" }.orEmpty()
+                                DropdownMenuItem(
+                                    text = { Text("Delete download (${download.quality}$size)") },
+                                    leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                                    onClick = {
+                                        menuOpen = false
+                                        viewModel.deleteDownload(download.contentId)
+                                    }
+                                )
+                            }
+                            if (canResume) {
+                                DropdownMenuItem(
+                                    text = { Text("Remove from Continue Watching") },
+                                    leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) },
+                                    onClick = {
+                                        menuOpen = false
+                                        viewModel.clearWatchProgress(video)
+                                        resumeMs = 0L
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
 
                 val isQualityDownloaded = chosenResolution != null &&

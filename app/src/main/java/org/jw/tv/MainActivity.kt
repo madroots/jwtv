@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -61,6 +62,8 @@ class MainActivity : ComponentActivity() {
                         VideoPlayerScreen(
                             video = video,
                             selectedResolution = viewModel.selectedResolution,
+                            // Read once per video, not on every Continue Watching update.
+                            startPositionMs = remember(video) { viewModel.startPositionMs(video) },
                             onBack = {
                                 viewModel.activeVideo = null
                                 navController.popBackStack("browser", inclusive = false)
