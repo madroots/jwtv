@@ -13,6 +13,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -183,6 +187,39 @@ fun VideoPlayerScreen(
         }
     }
 
+    /** Persists the resume position (or clears it near the end). */
+    fun saveProgress() {
+        val currentPos = exoPlayer.currentPosition
+        val totalDuration = exoPlayer.duration
+        if (totalDuration <= 0L) return
+        val progressPercent = currentPos.toFloat() / totalDuration.toFloat()
+        val dao = org.jw.tv.data.AppDatabase.getDatabase(context.applicationContext).mediaDao()
+        if (currentPos > 5000L && progressPercent < 0.95f) {
+            sharedPrefs.edit().putLong("progress_${video.contentId}", currentPos).apply()
+            val jsonStr = try {
+                org.jw.tv.api.MediatorClient.json.encodeToString(MediaItem.serializer(), video)
+            } catch (e: Exception) { "" }
+            val entity = org.jw.tv.data.WatchProgressEntity(
+                contentId = video.contentId,
+                title = video.title,
+                thumbnailUrl = video.getThumbnailUrl(small = true),
+                durationSeconds = video.duration,
+                positionMs = currentPos,
+                durationMs = totalDuration,
+                lastWatchedTimestamp = System.currentTimeMillis(),
+                rawMediaItemJson = jsonStr
+            )
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                dao.saveWatchProgress(entity)
+            }
+        } else {
+            sharedPrefs.edit().remove("progress_${video.contentId}").apply()
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                dao.deleteWatchProgress(video.contentId)
+            }
+        }
+    }
+
     // Monitor playback state, buffering, and errors; persist progress on exit.
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
@@ -202,38 +239,7 @@ fun VideoPlayerScreen(
         }
         exoPlayer.addListener(listener)
         onDispose {
-            val currentPos = exoPlayer.currentPosition
-            val totalDuration = exoPlayer.duration
-            if (totalDuration > 0L) {
-                val progressPercent = currentPos.toFloat() / totalDuration.toFloat()
-                val appContext = context.applicationContext
-                val dao = org.jw.tv.data.AppDatabase.getDatabase(appContext).mediaDao()
-                val jsonStr = try {
-                    org.jw.tv.api.MediatorClient.json.encodeToString(MediaItem.serializer(), video)
-                } catch (e: Exception) { "" }
-
-                if (currentPos > 5000L && progressPercent < 0.95f) {
-                    sharedPrefs.edit().putLong("progress_${video.contentId}", currentPos).apply()
-                    val entity = org.jw.tv.data.WatchProgressEntity(
-                        contentId = video.contentId,
-                        title = video.title,
-                        thumbnailUrl = video.getThumbnailUrl(small = true),
-                        durationSeconds = video.duration,
-                        positionMs = currentPos,
-                        durationMs = totalDuration,
-                        lastWatchedTimestamp = System.currentTimeMillis(),
-                        rawMediaItemJson = jsonStr
-                    )
-                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                        dao.saveWatchProgress(entity)
-                    }
-                } else {
-                    sharedPrefs.edit().remove("progress_${video.contentId}").apply()
-                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                        dao.deleteWatchProgress(video.contentId)
-                    }
-                }
-            }
+            saveProgress()
             exoPlayer.removeListener(listener)
             exoPlayer.release()
         }
@@ -302,12 +308,34 @@ fun VideoPlayerScreen(
     }
 
     // Back: cancel a pending seek, then hide the controls, then leave.
-    BackHandler {
+    fun handleBack() {
         when {
             scrubPosition != null -> scrubPosition = null
             showControls && playerError == null -> showControls = false
             else -> onBack()
         }
+    }
+
+    // System back (gesture/touch devices). Remote Back keys are handled in the
+    // root onPreviewKeyEvent below, before Compose can use them to move focus.
+    BackHandler { handleBack() }
+
+    // Home / app switch: pause instead of playing on in the background, save
+    // the position in case the system kills the app, and show the paused state
+    // when the user comes back. Observes the Activity, not the navigation
+    // entry, so leaving the player via Back doesn't trigger it.
+    val lifecycleOwner = (context as? LifecycleOwner) ?: LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                exoPlayer.pause()
+                scrubPosition = null
+                saveProgress()
+                revealControls(ControlFocus.PlayPause)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val rootFocusRequester = remember { FocusRequester() }
@@ -334,7 +362,13 @@ fun VideoPlayerScreen(
             .background(Color.Black)
             .onPreviewKeyEvent {
                 if (it.type == KeyEventType.KeyDown) interactionTick++
-                false
+                // Compose would otherwise turn remote Back into "move focus out
+                // of the focused button" and swallow it, so a focused control
+                // only lost its highlight. Act on key up, like Android does.
+                if (it.key == Key.Back) {
+                    if (it.type == KeyEventType.KeyUp) handleBack()
+                    true
+                } else false
             }
             // Touch/mouse toggle without adding a second focus target (a
             // clickable is focusable and would swallow D-pad keys).
