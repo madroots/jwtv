@@ -1,0 +1,7 @@
+# Baseline profile: ART compiles these ahead of time at install instead of
+# interpreting/JIT-ing them on first use. App + :core code is small, so it is
+# listed whole; Compose, Media3 etc. already ship their own profiles.
+HSPLorg/jw/phone/**->**(**)**
+Lorg/jw/phone/**;
+HSPLorg/jw/tv/**->**(**)**
+Lorg/jw/tv/**;

@@ -6,13 +6,19 @@ import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.ClosedCaptionDisabled
 import androidx.compose.material.icons.filled.Forward10
@@ -330,14 +336,15 @@ fun VideoPlayerScreen(
                 if (it.type == KeyEventType.KeyDown) interactionTick++
                 false
             }
-            .focusRequester(rootFocusRequester)
-            .focusable()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) {
-                if (showControls) showControls = false else revealControls(ControlFocus.PlayPause)
+            // Touch/mouse toggle without adding a second focus target (a
+            // clickable is focusable and would swallow D-pad keys).
+            .pointerInput(Unit) {
+                detectTapGestures {
+                    if (showControls) showControls = false else revealControls(ControlFocus.PlayPause)
+                }
             }
+            // Placed before the focus target so it sees keys from the video
+            // surface and, bubbling up, from every overlay control.
             .onKeyEvent { keyEvent ->
                 if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
                 when (keyEvent.key) {
@@ -370,6 +377,8 @@ fun VideoPlayerScreen(
                     else -> false
                 }
             }
+            .focusRequester(rootFocusRequester)
+            .focusable()
     ) {
         AndroidView(
             factory = { ctx ->
@@ -381,16 +390,26 @@ fun VideoPlayerScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
                     keepScreenOn = true
+                    // The video surface must never take Android view focus:
+                    // when it does (e.g. after the controls hide), D-pad keys
+                    // go to PlayerView instead of the Compose key handlers.
+                    isFocusable = false
+                    isFocusableInTouchMode = false
+                    descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
                 }
             },
             modifier = Modifier.fillMaxSize()
         )
 
-        if (showControls) {
-            // Top scrim + title
+        // Controls fade + slide (graphicsLayer/placement only, no relayout).
+        AnimatedVisibility(
+            visible = showControls,
+            modifier = Modifier.align(Alignment.TopCenter),
+            enter = fadeIn(tween(200)) + slideInVertically(tween(200)) { -it / 4 },
+            exit = fadeOut(tween(200)) + slideOutVertically(tween(200)) { -it / 4 }
+        ) {
             Box(
                 Modifier
-                    .align(Alignment.TopCenter)
                     .fillMaxWidth()
                     .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.75f), Color.Transparent)))
                     .padding(start = 48.dp, end = 48.dp, top = 32.dp, bottom = 56.dp)
@@ -404,11 +423,17 @@ fun VideoPlayerScreen(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
 
-            // Bottom scrim: seek bar + transport row
+        AnimatedVisibility(
+            visible = showControls,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = fadeIn(tween(200)) + slideInVertically(tween(200)) { it / 4 },
+            exit = fadeOut(tween(200)) + slideOutVertically(tween(200)) { it / 4 }
+        ) {
+            // Seek bar + transport row
             Column(
                 Modifier
-                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .onFocusChanged { overlayFocused = it.hasFocus }
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))))
