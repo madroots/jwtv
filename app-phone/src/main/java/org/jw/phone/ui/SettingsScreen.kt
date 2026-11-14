@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.jw.phone.BuildConfig
 import org.jw.tv.ui.MainViewModel
+import org.jw.tv.ui.formatBytes
 
 /**
  * Settings tab. Port of the TV SettingsDialog: default quality, language,
@@ -102,7 +103,8 @@ fun SettingsScreen(
         Spacer(Modifier.height(12.dp))
         SettingsRow(
             title = "Manage Downloads",
-            subtitle = "${viewModel.allDownloads.size} downloaded",
+            subtitle = "${viewModel.allDownloads.size} downloaded · " +
+                formatBytes(viewModel.downloadSizes.values.sum() + viewModel.unlistedDownloadBytes),
             onClick = onOpenDownloads
         )
 

@@ -1679,12 +1679,26 @@ fun SettingsDialog(
 }
 // ── Manage Downloads dialog ───────────────────────────────────────────────────
 
+@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun ManageDownloadsDialog(
     viewModel: MainViewModel,
     onDismiss: () -> Unit
 ) {
-    var downloads by remember { mutableStateOf(viewModel.allDownloads) }
+    // Read straight from the ViewModel so the list updates as soon as a delete
+    // lands; refresh on open so sizes/free space are current.
+    LaunchedEffect(Unit) { viewModel.refreshDownloads() }
+    val downloads = viewModel.allDownloads
+    val unlistedBytes = viewModel.unlistedDownloadBytes
+    val usedBytes = viewModel.downloadSizes.values.sum() + unlistedBytes
+
+    // Deleting removes the focused button; move focus to the row now at that
+    // index (or Close) so the remote never ends up focusing nothing.
+    val rowFocus = remember { mutableMapOf<String, FocusRequester>() }
+    val unlistedFocus = remember { FocusRequester() }
+    val closeFocus = remember { FocusRequester() }
+    var pendingFocusIndex by remember { mutableStateOf<Int?>(0) }
+    var confirmDeleteAll by remember { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1696,20 +1710,40 @@ fun ManageDownloadsDialog(
     ) {
         Box(
             modifier = Modifier
-                .width(560.dp)
-                .height(480.dp)
+                .width(680.dp)
+                .height(520.dp)
                 .background(Color(0xFF1E1E1E))
         ) {
+            // Inside the Dialog so it runs once the dialog window's content is
+            // composed and the requesters are attached.
+            LaunchedEffect(downloads, unlistedBytes) {
+                val index = pendingFocusIndex ?: return@LaunchedEffect
+                val target = downloads.getOrNull(index.coerceAtMost(downloads.lastIndex))
+                    ?.let { rowFocus[it.contentId] }
+                    ?: if (unlistedBytes > 0) unlistedFocus else closeFocus
+                try {
+                    target.requestFocus()
+                    pendingFocusIndex = null
+                } catch (_: IllegalStateException) { }
+            }
             Column(Modifier.fillMaxWidth().padding(20.dp)) {
-                Text(
-                    "Manage Downloads",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        "Manage Downloads",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        "Used ${formatBytes(usedBytes)} · Free ${formatBytes(viewModel.freeStorageBytes)}",
+                        color = Color(0xFF8B949E),
+                        fontSize = 13.sp
+                    )
+                }
                 Spacer(Modifier.height(16.dp))
 
-                if (downloads.isEmpty()) {
+                if (downloads.isEmpty() && unlistedBytes == 0L) {
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Text("No downloaded videos.", color = Color(0xFF8B949E), fontSize = 14.sp)
                     }
@@ -1718,88 +1752,142 @@ fun ManageDownloadsDialog(
                         Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        downloads.forEach { dl ->
-                            Surface(
-                                onClick = {},
-                                colors = ClickableSurfaceDefaults.colors(
-                                    containerColor = Color(0xFF262626),
-                                    focusedContainerColor = Color(0xFF333333)
-                                ),
-                                shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(0.dp)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    Modifier.fillMaxWidth().padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(
-                                            dl.title,
-                                            color = Color.White,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Spacer(Modifier.height(4.dp))
-                                        Text(
-                                            "Quality: ${dl.quality}",
-                                            color = Color(0xFF8B949E),
-                                            fontSize = 12.sp
-                                        )
+                        downloads.forEachIndexed { index, dl ->
+                            key(dl.contentId) {
+                                DownloadRow(
+                                    title = dl.title,
+                                    detail = listOfNotNull(
+                                        dl.quality,
+                                        viewModel.downloadSizes[dl.contentId]?.let(::formatBytes)
+                                    ).joinToString(" · "),
+                                    focusRequester = rowFocus.getOrPut(dl.contentId) { FocusRequester() },
+                                    onDelete = {
+                                        pendingFocusIndex = index
+                                        viewModel.deleteDownload(dl.contentId)
                                     }
-                                    OutlinedButton(
-                                        onClick = {
-                                            viewModel.deleteDownload(dl.contentId)
-                                            downloads = viewModel.allDownloads
-                                        },
-                                        colors = ButtonDefaults.colors(
-                                            contentColor = Color(0xFFFF0033),
-                                            focusedContainerColor = Color(0xFF2A3644),
-                                            focusedContentColor = Color(0xFFFF0033)
-                                        ),
-                                        border = ButtonDefaults.border(
-                                            border = Border(
-                                                border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
-                                                shape = RoundedCornerShape(0.dp)
-                                            ),
-                                            focusedBorder = Border(
-                                                border = BorderStroke(2.dp, Color.White),
-                                                shape = RoundedCornerShape(0.dp)
-                                            )
-                                        ),
-                                        shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp)),
-                                        modifier = Modifier.height(36.dp)
-                                    ) { Text("Delete", color = Color(0xFFFF0033), fontSize = 12.sp) }
-                                }
+                                )
                             }
+                        }
+                        if (unlistedBytes > 0) {
+                            DownloadRow(
+                                title = "Other files",
+                                detail = "Interrupted or replaced downloads · ${formatBytes(unlistedBytes)}",
+                                focusRequester = unlistedFocus,
+                                onDelete = {
+                                    pendingFocusIndex = downloads.size
+                                    viewModel.deleteUnlistedDownloads()
+                                }
+                            )
                         }
                     }
                 }
                 Spacer(Modifier.height(12.dp))
-                OutlinedButton(
-                    onClick = onDismiss,
-                    colors = ButtonDefaults.colors(
-                        contentColor = Color.White,
-                        focusedContainerColor = Color(0xFF2A3644),
-                        focusedContentColor = Color.White
-                    ),
-                    border = ButtonDefaults.border(
-                        border = Border(
-                            border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
-                            shape = RoundedCornerShape(0.dp)
-                        ),
-                        focusedBorder = Border(
-                            border = BorderStroke(2.dp, Color.White),
-                            shape = RoundedCornerShape(0.dp)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (downloads.isNotEmpty() || unlistedBytes > 0) {
+                        DialogButton(
+                            text = if (confirmDeleteAll) "Press again to delete everything"
+                                   else "Delete all",
+                            contentColor = Color(0xFFFF0033),
+                            onClick = {
+                                if (confirmDeleteAll) {
+                                    confirmDeleteAll = false
+                                    pendingFocusIndex = 0
+                                    viewModel.deleteAllDownloads()
+                                } else {
+                                    confirmDeleteAll = true
+                                }
+                            },
+                            modifier = Modifier.onFocusChanged {
+                                if (!it.isFocused) confirmDeleteAll = false
+                            }
                         )
-                    ),
-                    shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp)),
-                    modifier = Modifier.align(Alignment.End)
-                ) { Text("Close") }
+                    }
+                    DialogButton(
+                        text = "Close",
+                        contentColor = Color.White,
+                        onClick = onDismiss,
+                        modifier = Modifier.focusRequester(closeFocus)
+                    )
+                }
             }
         }
     }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun DownloadRow(
+    title: String,
+    detail: String,
+    focusRequester: FocusRequester,
+    onDelete: () -> Unit
+) {
+    // Only the Delete button is focusable; the row lights up with it so the
+    // remote's position is obvious.
+    var focused by remember { mutableStateOf(false) }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(if (focused) Color(0xFF333333) else Color(0xFF262626))
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(detail, color = Color(0xFF8B949E), fontSize = 12.sp)
+        }
+        Spacer(Modifier.width(12.dp))
+        DialogButton(
+            text = "Delete",
+            contentColor = Color(0xFFFF0033),
+            onClick = onDelete,
+            modifier = Modifier
+                .focusRequester(focusRequester)
+                .onFocusChanged { focused = it.isFocused }
+        )
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun DialogButton(
+    text: String,
+    contentColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedButton(
+        onClick = onClick,
+        colors = ButtonDefaults.colors(
+            contentColor = contentColor,
+            focusedContainerColor = Color(0xFF2A3644),
+            focusedContentColor = contentColor
+        ),
+        border = ButtonDefaults.border(
+            border = Border(
+                border = BorderStroke(1.dp, Color(0xFF5A6B7C)),
+                shape = RoundedCornerShape(0.dp)
+            ),
+            focusedBorder = Border(
+                border = BorderStroke(2.dp, Color.White),
+                shape = RoundedCornerShape(0.dp)
+            )
+        ),
+        shape = ButtonDefaults.shape(shape = RoundedCornerShape(0.dp)),
+        modifier = modifier.height(36.dp)
+    ) { Text(text, color = contentColor, fontSize = 12.sp) }
 }
 // ── Utilities ────────────────────────────────────────────────────────────────
 // formatDuration moved to :core (org.jw.tv.ui.UiFormat) — same package, so all

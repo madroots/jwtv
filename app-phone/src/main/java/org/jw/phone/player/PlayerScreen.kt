@@ -35,6 +35,8 @@ import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -655,18 +657,18 @@ private fun PortraitPlayerLayout(
                 IconButton(onClick = { onSeek((currentPosition - 10000L).coerceAtLeast(0L)); onSeekFinished() }) {
                     Icon(Icons.Filled.Replay10, contentDescription = "Back 10 seconds", tint = Color.White)
                 }
-                Button(
+                FilledIconButton(
                     onClick = onTogglePlay,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF2C3E50),
-                        contentColor = Color.White
+                    modifier = Modifier.size(56.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = Color.White,
+                        contentColor = Color.Black
                     )
                 ) {
-                    Text(
-                        if (isPlaying) "⏸ Pause" else "▶ Play",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 12.dp)
+                    Icon(
+                        if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        modifier = Modifier.size(32.dp)
                     )
                 }
                 IconButton(onClick = { onSeek((currentPosition + 10000L).coerceAtMost(duration.coerceAtLeast(0L))); onSeekFinished() }) {
