@@ -1163,18 +1163,32 @@ fun VideoDetailsDialog(
         )
     ) {
         val enter = rememberEnterProgress()
+        // Opened by holding OK on a Continue Watching card, the remote keeps
+        // sending OK repeats and then the release into this dialog, which
+        // pressed Resume. OK only counts once a fresh press starts here.
+        var okArmed by remember { mutableStateOf(false) }
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                // Remote Back: close the menu first, then the dialog. Handled
-                // here because Compose would otherwise spend Back on moving
-                // focus out of the focused button.
                 .onPreviewKeyEvent {
-                    if (it.key != Key.Back) return@onPreviewKeyEvent false
-                    if (it.type == KeyEventType.KeyUp) {
-                        if (menuOpen) menuOpen = false else onDismiss()
+                    when (it.key) {
+                        // Remote Back: close the menu first, then the dialog.
+                        // Handled here because Compose would otherwise spend
+                        // Back on moving focus out of the focused button.
+                        Key.Back -> {
+                            if (it.type == KeyEventType.KeyUp) {
+                                if (menuOpen) menuOpen = false else onDismiss()
+                            }
+                            true
+                        }
+                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                            if (it.type == KeyEventType.KeyDown && it.nativeKeyEvent.repeatCount == 0) {
+                                okArmed = true
+                            }
+                            !okArmed // swallow leftovers of the press that opened us
+                        }
+                        else -> false
                     }
-                    true
                 }
                 .fadeIn(enter)
                 .background(Color.Black.copy(alpha = 0.85f)),
